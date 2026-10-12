@@ -6,6 +6,19 @@ HTML file that runs straight from the folder.
 
 ![games](https://img.shields.io/badge/games-124-f0c040) ![deps](https://img.shields.io/badge/dependencies-0-40c0a0) ![license](https://img.shields.io/badge/license-MIT-5090e0)
 
+## 📸 Screenshots
+
+![The Game Hub](docs/screenshots/hub.jpg)
+
+| | |
+|:---:|:---:|
+| **Solitaire** · cards | **Chess** · board |
+| ![Solitaire](docs/screenshots/solitaire.jpg) | ![Chess](docs/screenshots/chess.jpg) |
+| **2048** · puzzle & brain | **Bubble Shooter** · arcade |
+| ![2048](docs/screenshots/2048.jpg) | ![Bubble Shooter](docs/screenshots/bubbleshooter.jpg) |
+| **Roulette** · casino & luck | |
+| ![Roulette](docs/screenshots/roulette.jpg) | |
+
 ## ▶ Run it
 
 - **Windows:** double-click **`GameHub.exe`** (one file, no Python needed). It starts a
