@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cryptogram</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.cr-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 14px;}
+.cr-quote{display:flex;flex-wrap:wrap;gap:3px 0;justify-content:center;max-width:620px;line-height:2.6;}
+.cr-grp{display:inline-flex;flex-direction:column;align-items:center;margin:0 1px;cursor:pointer;}
+.cr-letter{width:26px;height:30px;border-bottom:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:700;font-size:18px;color:var(--accent);}
+.cr-grp.sel .cr-letter{border-bottom-color:var(--accent);background:rgba(240,192,64,.12);}
+.cr-grp.correct .cr-letter{color:var(--green);}
+.cr-cipher{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);}
+.cr-space{width:14px;}
+.cr-punct{font-family:'Orbitron',monospace;font-size:18px;color:var(--text);display:inline-flex;align-items:flex-end;padding-bottom:4px;}
+.cr-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:20px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">🔐 CRYPTOGRAM</span>
+  <div class="h-btns"><div class="info-pill">SOLVED: <span id="wins">0</span></div><button class="hbtn" onclick="hint()">💡 HINT</button><button class="hbtn" onclick="newGame()">NEW QUOTE</button></div>
+</div>
+<div class="cr-wrap">
+  <div class="cr-msg" id="msg">Each letter stands for another. Click a letter and type your guess.</div>
+  <div class="cr-quote" id="quote"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 DECODED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">NEXT QUOTE</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='cryptogram';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const QUOTES=[
+ "THE ONLY WAY TO DO GREAT WORK IS TO LOVE WHAT YOU DO",
+ "IN THE MIDDLE OF DIFFICULTY LIES OPPORTUNITY",
+ "KNOWLEDGE SPEAKS BUT WISDOM LISTENS",
+ "A JOURNEY OF A THOUSAND MILES BEGINS WITH A SINGLE STEP",
+ "WHAT WE THINK WE BECOME",
+ "FORTUNE FAVORS THE BOLD",
+ "THE BEST TIME TO PLANT A TREE WAS TWENTY YEARS AGO",
+ "SIMPLICITY IS THE ULTIMATE SOPHISTICATION",
+ "ACTIONS SPEAK LOUDER THAN WORDS",
+ "WELL BEGUN IS HALF DONE",
+ "CURIOSITY IS THE WICK IN THE CANDLE OF LEARNING",
+ "DREAM BIG AND DARE TO FAIL",
+ "THE FUTURE BELONGS TO THE CURIOUS",
+ "EVERY MOMENT IS A FRESH BEGINNING",
+ "CREATIVITY TAKES COURAGE"
+];
+let plain='', cipher={}, decipher={}, guess={}, selected='', over=false;
+function newGame(){
+  plain=QUOTES[0|Math.random()*QUOTES.length]; over=false; guess={}; selected='';
+  // build random substitution (derangement-ish)
+  const alpha='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''); let perm;
+  do{ perm=shuffle(alpha.slice()); }while(perm.some((p,i)=>p===alpha[i]));
+  cipher={}; decipher={}; alpha.forEach((a,i)=>{cipher[a]=perm[i];decipher[perm[i]]=a;});
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  render();
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function render(){
+  const q=document.getElementById('quote'); q.innerHTML='';
+  for(const ch of plain){
+    if(ch===' '){ const sp=document.createElement('span'); sp.className='cr-space'; q.appendChild(sp); continue; }
+    if(!/[A-Z]/.test(ch)){ const p=document.createElement('span'); p.className='cr-punct'; p.textContent=ch; q.appendChild(p); continue; }
+    const cl=cipher[ch]; // cipher letter shown
+    const grp=document.createElement('div'); grp.className='cr-grp'+(selected===cl?' sel':'')+(guess[cl]===decipher[cl]?' correct':'');
+    const g=guess[cl]||'';
+    grp.innerHTML='<div class="cr-letter">'+g+'</div><div class="cr-cipher">'+cl+'</div>';
+    grp.onclick=()=>{ selected=cl; render(); };
+    q.appendChild(grp);
+  }
+}
+function assign(ch){ if(over||!selected)return; // remove this plaintext from any other cipher letter
+  for(const k in guess) if(guess[k]===ch) delete guess[k];
+  guess[selected]=ch; sfx('select'); render(); if(checkWin())win();
+}
+function hint(){ if(over)return; // reveal a correct mapping for a cipher letter present in quote not yet solved
+  const letters=[...new Set(plain.replace(/[^A-Z]/g,'').split('').map(c=>cipher[c]))];
+  const unsolved=letters.filter(cl=>guess[cl]!==decipher[cl]);
+  if(unsolved.length){ const cl=unsolved[0|Math.random()*unsolved.length]; for(const k in guess) if(guess[k]===decipher[cl]) delete guess[k]; guess[cl]=decipher[cl]; sfx('coin'); render(); if(checkWin())win(); }
+}
+function checkWin(){ for(const ch of plain){ if(/[A-Z]/.test(ch)){ const cl=cipher[ch]; if(guess[cl]!==ch) return false; } } return true; }
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  document.getElementById('win-sub').textContent='"'+plain+'"'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+document.addEventListener('keydown',e=>{ const c=e.key.toUpperCase(); if(c>='A'&&c<='Z'&&c.length===1)assign(c); else if(e.key==='Backspace'&&selected){ delete guess[selected]; render(); } });
+newGame();
+</script>
+</body>
+</html>

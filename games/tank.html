@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tank Artillery</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.tk-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#tank{background:linear-gradient(180deg,#1a2744,#0a1020);border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.tk-ctrls{display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;font-family:'Orbitron',monospace;font-size:12px;}
+.tk-ctrls input[type=range]{width:120px;}
+.tk-fire{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:11px 26px;border-radius:9px;border:3px solid var(--red);color:var(--red);background:var(--surface);cursor:pointer;letter-spacing:1px;}
+.tk-fire:disabled{opacity:.4;cursor:default;}
+.tk-wind{font-family:'Orbitron',monospace;font-size:12px;color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">💥 TANK ARTILLERY</span>
+  <div class="h-btns"><div class="info-pill">YOU: <span id="y0">0</span></div><div class="info-pill">AI: <span id="y1">0</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="tk-wrap">
+  <div class="tk-wind" id="wind">Wind: —</div>
+  <canvas id="tank" width="640" height="360"></canvas>
+  <div class="tk-ctrls">
+    <label>ANGLE <input type="range" id="angle" min="10" max="80" value="45"> <span id="angV">45°</span></label>
+    <label>POWER <input type="range" id="power" min="20" max="100" value="60"> <span id="powV">60</span></label>
+    <button class="tk-fire" id="fireBtn" onclick="fire()">🔥 FIRE</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='tank';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('tank'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, G=0.35;
+let terrain, t0, t1, wind, shell, turn, scores, over, busy, raf, roundOver;
+function newGame(){ scores=[0,0]; genTerrain(); place(); turn=0; over=false; busy=false; roundOver=false; shell=null; wind=(Math.random()-0.5)*0.12;
+  document.getElementById('win-overlay').classList.remove('show'); updateUI(); draw(); setFire(true); document.getElementById('wind').textContent='Wind: '+(wind>0?'→ ':'← ')+Math.abs(wind*100).toFixed(0); }
+function genTerrain(){ terrain=[]; let h=H*0.6; for(let x=0;x<=W;x++){ h+=(Math.random()-0.5)*4; h=Math.max(H*0.4,Math.min(H*0.8,h)); terrain[x]=h; } // smooth
+  for(let k=0;k<6;k++)for(let x=1;x<W;x++)terrain[x]=(terrain[x-1]+terrain[x]+terrain[x+1||x])/3; }
+function place(){ t0={x:60}; t1={x:W-60}; t0.y=terrain[t0.x]; t1.y=terrain[t1.x]; }
+function newRound(){ genTerrain(); place(); shell=null; roundOver=false; wind=(Math.random()-0.5)*0.12; turn=0; draw(); setFire(true); document.getElementById('wind').textContent='Wind: '+(wind>0?'→ ':'← ')+Math.abs(wind*100).toFixed(0); }
+function fire(){ if(over||busy||turn!==0)return; shoot(0, +document.getElementById('angle').value, +document.getElementById('power').value); }
+function shoot(who, ang, pow){ setFire(false); busy=true;
+  const tank=who===0?t0:t1; const dir=who===0?1:-1; const rad=ang*Math.PI/180; const sp=pow*0.14;
+  shell={x:tank.x, y:tank.y-14, vx:Math.cos(rad)*sp*dir, vy:-Math.sin(rad)*sp, who}; sfx('select');
+  cancelAnimationFrame(raf); animate();
+}
+function animate(){ if(!shell){return;} shell.vx+=wind*0.1; shell.vy+=G; shell.x+=shell.vx; shell.y+=shell.vy;
+  // hit ground / target / out
+  if(shell.x<0||shell.x>W){ endShot(null); return; }
+  const gx=Math.round(Math.max(0,Math.min(W,shell.x))); if(shell.y>=terrain[gx]){ endShot('ground', shell.x); return; }
+  const tgt=shell.who===0?t1:t0; if(Math.abs(shell.x-tgt.x)<16 && Math.abs(shell.y-tgt.y)<18){ endShot('hit'); return; }
+  draw(); raf=requestAnimationFrame(animate);
+}
+function endShot(kind, x){ const who=shell.who; const exX=x||shell.x, exY=kind==='ground'?terrain[Math.round(x)]:shell.y; shell=null; draw();
+  if(kind==='hit'){ scores[who]++; updateUI(); sfx('win'); if(scores[who]>=3){ return finish(who); } roundOver=true; busy=false; drawBoom(exX,exY); setTimeout(()=>{ newRound(); if(turn!==0){busy=true;setTimeout(aiFire,800);} },1400); return; }
+  // miss: crater + swap turn
+  if(kind==='ground'){ drawBoom(exX,exY); crater(exX); }
+  busy=false; turn=1-turn; draw();
+  if(turn===1&&!over){ busy=true; setTimeout(aiFire,900); } else setFire(true);
+}
+function crater(x){ const r=16; for(let i=-r;i<=r;i++){ const px=Math.round(x+i); if(px>=0&&px<=W){ terrain[px]=Math.max(terrain[px], terrain[px]+Math.max(0,(r-Math.abs(i))*0.5)); } } t0.y=terrain[t0.x]; t1.y=terrain[t1.x]; }
+function aiFire(){ if(over)return; // AI aims with rough physics + noise
+  const dx=t0.x-t1.x; const dist=Math.abs(dx); let ang=35+Math.random()*25; let pow=Math.min(100, 30+dist*0.09 + (Math.random()-0.5)*18); ang+= (Math.random()-0.5)*10; shoot(1, ang, pow); }
+function setFire(on){ document.getElementById('fireBtn').disabled=!on||over; }
+function updateUI(){ document.getElementById('y0').textContent=scores[0]; document.getElementById('y1').textContent=scores[1]; }
+function draw(){ ctx.clearRect(0,0,W,H); ctx.fillStyle='#2a4a2a'; ctx.beginPath(); ctx.moveTo(0,H); for(let x=0;x<=W;x++)ctx.lineTo(x,terrain[x]); ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  drawTank(t0,'#40c0a0'); drawTank(t1,'#e05050');
+  if(shell){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(shell.x,shell.y,4,0,7); ctx.fill(); }
+}
+function drawTank(t,color){ ctx.fillStyle=color; ctx.fillRect(t.x-14,t.y-10,28,10); ctx.beginPath(); ctx.arc(t.x,t.y-10,8,Math.PI,0); ctx.fill(); ctx.strokeStyle=color; ctx.lineWidth=3; const dir=color==='#40c0a0'?1:-1; ctx.beginPath(); ctx.moveTo(t.x,t.y-14); ctx.lineTo(t.x+dir*14,t.y-22); ctx.stroke(); }
+function drawBoom(x,y){ ctx.fillStyle='rgba(240,160,40,.8)'; ctx.beginPath(); ctx.arc(x,y,20,0,7); ctx.fill(); }
+function finish(who){ over=true; busy=false; const youWin=who===0; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 AI WINS!'; document.getElementById('win-sub').textContent='Best of 5 — Final '+scores[0]+'–'+scores[1]; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500); }
+document.getElementById('angle').addEventListener('input',e=>document.getElementById('angV').textContent=e.target.value+'°');
+document.getElementById('power').addEventListener('input',e=>document.getElementById('powV').textContent=e.target.value);
+newGame();
+</script>
+</body>
+</html>

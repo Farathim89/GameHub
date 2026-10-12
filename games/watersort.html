@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Water Sort</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ws-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 12px;}
+.ws-tubes{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;max-width:720px;}
+.ws-tube{
+  width:52px;height:180px;border:3px solid #556;border-top:none;
+  border-radius:6px 6px 16px 16px;display:flex;flex-direction:column-reverse;
+  padding:4px;gap:3px;cursor:pointer;background:rgba(255,255,255,.03);transition:transform .12s;
+}
+.ws-tube:hover{transform:translateY(-4px);}
+.ws-tube.sel{transform:translateY(-14px);box-shadow:0 0 0 2px var(--accent);}
+.ws-seg{flex:1;border-radius:4px;min-height:0;}
+.ws-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🧪 WATER SORT</span>
+  <div class="h-btns">
+    <select id="diff-sel" onchange="newGame()">
+      <option value="5">EASY (5)</option>
+      <option value="7" selected>MEDIUM (7)</option>
+      <option value="9">HARD (9)</option>
+    </select>
+    <div class="info-pill">MOVES: <span id="moves">0</span></div>
+    <button class="hbtn" onclick="undo()">↩ UNDO</button>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ws-wrap">
+  <div class="ws-hint">Pour so each tube holds a single colour. You can pour onto the same colour (or an empty tube) only.</div>
+  <div class="ws-tubes" id="tubes"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SORTED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='watersort';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const COLORS=['#e05050','#f0a040','#f0c040','#40c0a0','#5090e0','#c080e0','#ff80b0','#50d0d0','#a0e050'];
+const CAP=4;
+let tubes=[], sel=-1, moves=0, nColors=7, history=[], over=false;
+
+function deal(){
+  let pool=[];
+  for(let c=0;c<nColors;c++) for(let k=0;k<CAP;k++) pool.push(c);
+  for(let i=pool.length-1;i>0;i--){const j=0|Math.random()*(i+1);[pool[i],pool[j]]=[pool[j],pool[i]];}
+  const t=[];
+  for(let k=0;k<nColors;k++) t.push(pool.slice(k*CAP,k*CAP+CAP));
+  t.push([]); t.push([]); // 2 empty tubes
+  return t;
+}
+function newGame(){
+  nColors=parseInt(document.getElementById('diff-sel').value,10);
+  over=false; sel=-1; moves=0; history=[];
+  document.getElementById('win-overlay').classList.remove('show');
+  // deal until we get a provably-solvable (and not already-solved) board
+  let attempts=0;
+  do{ tubes=deal(); attempts++; } while((isSolvedState(tubes)||!solvable(tubes)) && attempts<60);
+  render();
+}
+
+/* ---- solvability check (BFS/DFS over canonical states) ---- */
+function isSolvedState(st){ return st.every(t=> t.length===0 || (t.length===CAP && t.every(v=>v===t[0])) ); }
+function canPourState(st,from,to){
+  if(from===to||!st[from].length||st[to].length>=CAP) return false;
+  const c=st[from][st[from].length-1];
+  if(st[to].length && st[to][st[to].length-1]!==c) return false;
+  // avoid pointless move: whole from-tube is one color and to is empty
+  if(st[to].length===0 && st[from].every(v=>v===c)) return false;
+  return true;
+}
+function doPourState(st,from,to){
+  const ns=st.map(t=>t.slice());
+  const c=ns[from][ns[from].length-1];
+  let run=0; for(let i=ns[from].length-1;i>=0&&ns[from][i]===c;i--)run++;
+  run=Math.min(run,CAP-ns[to].length);
+  for(let k=0;k<run;k++) ns[to].push(ns[from].pop());
+  return ns;
+}
+function key(st){ return st.map(t=>t.join('.')).sort().join('|'); }
+function solvable(start){
+  const seen=new Set(); const stack=[start]; let iter=0;
+  while(stack.length && iter++<120000){
+    const st=stack.pop(); const k=key(st);
+    if(seen.has(k)) continue; seen.add(k);
+    if(isSolvedState(st)) return true;
+    for(let i=0;i<st.length;i++) for(let j=0;j<st.length;j++){
+      if(canPourState(st,i,j)) stack.push(doPourState(st,i,j));
+    }
+  }
+  return false;
+}
+function topColor(t){ return t.length?t[t.length-1]:null; }
+function topRun(t){ if(!t.length)return 0; const c=t[t.length-1]; let n=0; for(let i=t.length-1;i>=0&&t[i]===c;i--)n++; return n; }
+
+function clickTube(i){
+  if(over) return;
+  if(sel===-1){ if(!tubes[i].length){sfx('error');return;} sel=i; sfx('select'); render(); return; }
+  if(sel===i){ sel=-1; render(); return; }
+  if(pour(sel,i)){
+    moves++; sfx('place'); sel=-1; render();
+    if(solved()) win();
+  } else { sfx('error'); sel=-1; render(); }
+}
+function pour(from,to){
+  if(!tubes[from].length) return false;
+  if(tubes[to].length>=CAP) return false;
+  const c=topColor(tubes[from]);
+  if(tubes[to].length && topColor(tubes[to])!==c) return false;
+  const run=Math.min(topRun(tubes[from]), CAP-tubes[to].length);
+  if(run<=0) return false;
+  history.push(JSON.stringify(tubes));
+  for(let k=0;k<run;k++){ tubes[to].push(tubes[from].pop()); }
+  return true;
+}
+function undo(){
+  if(over||!history.length) return;
+  tubes=JSON.parse(history.pop()); moves=Math.max(0,moves-1); sel=-1; render();
+}
+function solved(){
+  return tubes.every(t=> t.length===0 || (t.length===CAP && t.every(v=>v===t[0])) );
+}
+function render(){
+  const wrap=document.getElementById('tubes'); if(!wrap)return;
+  wrap.innerHTML='';
+  tubes.forEach((t,i)=>{
+    const el=document.createElement('div'); el.className='ws-tube'+(sel===i?' sel':'');
+    el.onclick=()=>clickTube(i);
+    for(let k=0;k<t.length;k++){ const s=document.createElement('div'); s.className='ws-seg'; s.style.background=COLORS[t[k]]; el.appendChild(s); }
+    wrap.appendChild(el);
+  });
+  document.getElementById('moves').textContent=moves;
+}
+function win(){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best_'+nColors,moves,'low'):{value:moves,isBest:false};
+  document.getElementById('win-sub').textContent='Sorted in '+moves+' moves'+(r.isBest?' — NEW BEST! 🎉':' · Best '+r.value);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+newGame();
+</script>
+</body>
+</html>

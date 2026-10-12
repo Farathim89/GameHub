@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hangman</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.hm-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 12px;}
+.hm-top{display:flex;gap:24px;align-items:center;flex-wrap:wrap;justify-content:center;}
+#gallows{background:var(--surface);border:2px solid var(--border);border-radius:12px;}
+.hm-cat{font-family:'Orbitron',monospace;font-size:12px;color:var(--dim);letter-spacing:2px;}
+.hm-word{font-family:'Orbitron',monospace;font-size:clamp(22px,6vw,38px);font-weight:900;letter-spacing:6px;color:var(--accent);min-height:46px;text-align:center;}
+.hm-keys{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;max-width:520px;width:100%;}
+.hm-key{font-family:'Orbitron',monospace;font-weight:700;font-size:15px;padding:10px 0;border-radius:7px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;transition:all .12s;}
+.hm-key:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
+.hm-key:disabled{opacity:.3;cursor:default;}
+.hm-key.good{background:rgba(64,192,160,.25);border-color:var(--green);color:var(--green);}
+.hm-key.bad{background:rgba(224,80,80,.2);border-color:var(--red);color:var(--red);}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">🎪 HANGMAN</span>
+  <div class="h-btns">
+    <div class="info-pill">WON: <span id="wins">0</span></div>
+    <div class="info-pill">STREAK: <span id="streak">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW WORD</button>
+  </div>
+</div>
+<div class="hm-wrap">
+  <div class="hm-top">
+    <canvas id="gallows" width="200" height="220"></canvas>
+    <div style="display:flex;flex-direction:column;gap:10px;align-items:center;">
+      <div class="hm-cat" id="cat">CATEGORY</div>
+      <div class="hm-word" id="word"></div>
+      <div class="hm-cat">Wrong: <span id="wrong">0</span>/6</div>
+    </div>
+  </div>
+  <div class="hm-keys" id="keys"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">NEXT WORD</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='hangman';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const WORDS=[
+  ['ANIMALS',['ELEPHANT','GIRAFFE','DOLPHIN','KANGAROO','PENGUIN','OCTOPUS','CHEETAH','HEDGEHOG','RHINOCEROS','BUTTERFLY']],
+  ['COUNTRIES',['BRAZIL','CANADA','JAPAN','AUSTRALIA','MOROCCO','PORTUGAL','THAILAND','ICELAND','ARGENTINA','VIETNAM']],
+  ['FOOD',['SPAGHETTI','CHOCOLATE','PANCAKE','AVOCADO','BROCCOLI','SANDWICH','PINEAPPLE','LASAGNA','CROISSANT','DUMPLING']],
+  ['SPACE',['GALAXY','ASTEROID','NEBULA','SATURN','TELESCOPE','METEOR','ASTRONAUT','GRAVITY','SUPERNOVA','ECLIPSE']],
+  ['SPORTS',['BASKETBALL','VOLLEYBALL','CRICKET','MARATHON','SNOWBOARD','ARCHERY','GYMNASTICS','BADMINTON','CYCLING','SURFING']],
+  ['MUSIC',['GUITAR','TRUMPET','SYMPHONY','MELODY','SAXOPHONE','KEYBOARD','VIOLIN','RHYTHM','ORCHESTRA','HARMONY']]
+];
+let word='', cat='', guessed=new Set(), wrong=0, over=false;
+const cv=document.getElementById('gallows'), ctx=cv.getContext('2d');
+
+function newGame(){
+  const pair=WORDS[0|Math.random()*WORDS.length];
+  cat=pair[0]; word=pair[1][0|Math.random()*pair[1].length];
+  guessed=new Set(); wrong=0; over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('cat').textContent=cat;
+  document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  document.getElementById('streak').textContent=(window.GH?GH.score.get(GAME,'streak'):0)||0;
+  buildKeys(); render();
+}
+function buildKeys(){
+  const k=document.getElementById('keys'); k.innerHTML='';
+  for(let i=65;i<=90;i++){ const ch=String.fromCharCode(i);
+    const b=document.createElement('button'); b.className='hm-key'; b.textContent=ch; b.id='k'+ch;
+    b.onclick=()=>guess(ch); k.appendChild(b);
+  }
+}
+function guess(ch){
+  if(over||guessed.has(ch)) return;
+  guessed.add(ch);
+  const btn=document.getElementById('k'+ch); btn.disabled=true;
+  if(word.includes(ch)){ btn.classList.add('good'); sfx('pop'); }
+  else { btn.classList.add('bad'); wrong++; sfx('error'); }
+  render();
+  if(word.split('').every(c=>guessed.has(c))) win();
+  else if(wrong>=6) lose();
+}
+function render(){
+  document.getElementById('word').textContent=word.split('').map(c=>guessed.has(c)?c:'_').join(' ');
+  document.getElementById('wrong').textContent=wrong;
+  drawGallows();
+}
+function drawGallows(){
+  ctx.clearRect(0,0,200,220); ctx.strokeStyle='#8a7a5a'; ctx.lineWidth=5; ctx.lineCap='round';
+  // base gallows always
+  ctx.beginPath(); ctx.moveTo(20,210);ctx.lineTo(120,210); // ground
+  ctx.moveTo(50,210);ctx.lineTo(50,20); // pole
+  ctx.lineTo(140,20); // beam
+  ctx.lineTo(140,45); // rope
+  ctx.stroke();
+  ctx.strokeStyle='#f0c040'; ctx.lineWidth=4;
+  const p=wrong;
+  if(p>=1){ ctx.beginPath(); ctx.arc(140,60,15,0,7); ctx.stroke(); } // head
+  if(p>=2){ ctx.beginPath(); ctx.moveTo(140,75);ctx.lineTo(140,130); ctx.stroke(); } // body
+  if(p>=3){ ctx.beginPath(); ctx.moveTo(140,90);ctx.lineTo(118,110); ctx.stroke(); } // left arm
+  if(p>=4){ ctx.beginPath(); ctx.moveTo(140,90);ctx.lineTo(162,110); ctx.stroke(); } // right arm
+  if(p>=5){ ctx.beginPath(); ctx.moveTo(140,130);ctx.lineTo(120,165); ctx.stroke(); } // left leg
+  if(p>=6){ ctx.beginPath(); ctx.moveTo(140,130);ctx.lineTo(160,165); ctx.stroke(); } // right leg
+}
+function win(){
+  over=true; sfx('win');
+  const w=window.GH?GH.score.inc(GAME,'wins',1):0;
+  const s=window.GH?GH.score.inc(GAME,'streak',1):0;
+  document.getElementById('wins').textContent=w; document.getElementById('streak').textContent=s;
+  document.getElementById('win-msg').textContent='🏆 SOLVED!';
+  document.getElementById('win-sub').textContent='The word was '+word+(s>1?' · '+s+' in a row! 🔥':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function lose(){
+  over=true;
+  word.split('').forEach(c=>{const b=document.getElementById('k'+c); if(b){b.classList.add('good');}});
+  document.getElementById('word').textContent=word.split('').join(' ');
+  if(window.GH)GH.score.set(GAME,'streak',0);
+  document.getElementById('streak').textContent=0;
+  document.getElementById('win-msg').textContent='💀 GAME OVER';
+  document.getElementById('win-sub').textContent='The word was '+word;
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+document.addEventListener('keydown',e=>{ const c=e.key.toUpperCase(); if(c>='A'&&c<='Z'&&c.length===1) guess(c); });
+newGame();
+</script>
+</body>
+</html>

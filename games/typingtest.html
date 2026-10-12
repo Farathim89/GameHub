@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Typing Test</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.tt-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 12px;}
+.tt-stats{display:flex;gap:26px;font-family:'Orbitron',monospace;font-size:14px;}
+.tt-stats b{color:var(--accent);font-size:22px;display:block;}
+.tt-text{font-family:'Share Tech Mono',monospace;font-size:21px;line-height:1.7;max-width:640px;width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:break-word;background:var(--surface);padding:18px 20px;border-radius:12px;border:2px solid var(--border);}
+.tt-text span{transition:color .05s;}
+.tt-text .done{color:var(--green);}
+.tt-text .wrong{color:#fff;background:#c02030;border-radius:2px;}
+.tt-text .cur{background:var(--accent);color:#0a0a14;border-radius:2px;}
+.tt-in{font-family:'Share Tech Mono',monospace;font-size:18px;width:min(92vw,640px);padding:12px;border-radius:10px;background:var(--surface);color:var(--fg);border:3px solid var(--accent);}
+.tt-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;color:var(--dim);}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">⌨️ TYPING TEST</span>
+  <div class="h-btns"><div class="info-pill">BEST WPM: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">NEW TEXT</button></div>
+</div>
+<div class="tt-wrap">
+  <div class="tt-stats"><div>WPM<b id="wpm">0</b></div><div>ACCURACY<b id="acc">100%</b></div><div>TIME<b id="time">0s</b></div></div>
+  <div class="tt-text" id="text"></div>
+  <input class="tt-in" id="inp" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Start typing here…">
+  <div class="tt-msg" id="msg">The timer starts when you type the first character.</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">✅ DONE!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">TRY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='typingtest';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const TEXTS=[
+"the quick brown fox jumps over the lazy dog while the sun sets slowly behind the distant hills",
+"typing fast is a skill that grows with steady daily practice and a calm and focused mind",
+"a journey of a thousand miles begins with a single step so take it now and never look back",
+"bright ideas often arrive when you least expect them so always keep a notebook close at hand",
+"the ocean waves crashed against the rocks as seabirds circled high above the quiet morning shore",
+"good code is simple clear and easy to read long after the person who wrote it has moved on"];
+let target='', started=false, t0=0, best, done=false, tick=null;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+document.getElementById('best').textContent=best;
+const inp=document.getElementById('inp');
+function newGame(){ target=TEXTS[0|Math.random()*TEXTS.length]; started=false; done=false; clearInterval(tick); inp.value=''; inp.disabled=false; document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; document.getElementById('wpm').textContent=0; document.getElementById('acc').textContent='100%'; document.getElementById('time').textContent='0s'; document.getElementById('msg').textContent='The timer starts when you type the first character.'; renderText(''); inp.focus(); }
+function renderText(typed){ const el=document.getElementById('text'); let html='';
+  for(let i=0;i<target.length;i++){ const ch=target[i]; let cls=''; if(i<typed.length){ cls=typed[i]===ch?'done':'wrong'; } else if(i===typed.length){ cls='cur'; } html+='<span class="'+cls+'">'+(ch===' '?' ':ch)+'</span>'; }
+  el.innerHTML=html; }
+function stats(typed){ const elapsed=(performance.now()-t0)/1000; let correct=0; for(let i=0;i<typed.length;i++)if(typed[i]===target[i])correct++;
+  const words=typed.length/5; const wpm=elapsed>=1?Math.round(words/(elapsed/60)):0; const acc=typed.length?Math.round(correct/typed.length*100):100;
+  document.getElementById('wpm').textContent=wpm; document.getElementById('acc').textContent=acc+'%'; document.getElementById('time').textContent=elapsed.toFixed(1)+'s'; return {wpm,acc,elapsed}; }
+inp.addEventListener('input',()=>{ if(done)return; const typed=inp.value; if(!started){ started=true; t0=performance.now(); tick=setInterval(()=>stats(inp.value),200); }
+  renderText(typed); stats(typed);
+  if(typed.length>=target.length){ finish(typed); } });
+function finish(typed){ done=true; inp.disabled=true; clearInterval(tick); const s=stats(typed); sfx('win');
+  let wpm=s.wpm; if(s.acc>=90 && wpm>best){ best=wpm; if(window.GH)GH.score.best(GAME,'best',wpm,'high'); document.getElementById('best').textContent=best; }
+  document.getElementById('win-sub').textContent=wpm+' WPM at '+s.acc+'% accuracy in '+s.elapsed.toFixed(1)+'s.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+newGame();
+</script>
+</body>
+</html>

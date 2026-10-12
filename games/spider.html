@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spider Solitaire</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
+<style>
+/* ── CARD SIZE ── */
+:root{--cw:64px;--ch:86px;}
+@media(max-width:740px){:root{--cw:54px;--ch:72px;}}
+@media(max-width:610px){:root{--cw:44px;--ch:60px;}}
+@media(max-width:490px){:root{--cw:36px;--ch:50px;}}
+
+body{overflow-x:hidden;}
+
+/* ── COLUMNS AREA ── */
+.spd-cols{
+  display:flex;justify-content:center;gap:5px;
+  padding:0 8px 12px;
+  overflow-x:auto;overflow-y:auto;
+  max-height:calc(100vh - 240px);
+  align-items:flex-start;
+}
+
+/* ── INFO BAR ── */
+.spd-info{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;
+  padding:8px 14px;margin:8px auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  max-width:900px;width:calc(100% - 16px);box-sizing:border-box;
+}
+.spd-info-left{display:flex;align-items:center;gap:10px;}
+.spd-info-right{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.spd-lbl{font-family:'Orbitron',monospace;font-size:9px;color:#444;letter-spacing:2px;white-space:nowrap;}
+
+/* ── STOCK BUTTON ── */
+.stock-btn{
+  position:relative;width:44px;height:60px;
+  border:2px dashed #333;border-radius:7px;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;transition:border-color .2s;
+}
+.stock-btn:hover{border-color:var(--green);}
+.stock-back{
+  position:absolute;border-radius:6px;
+  background:repeating-linear-gradient(135deg,#122050 0,#122050 5px,#0a1635 5px,#0a1635 10px);
+  border:2px solid #1e3a7a;
+}
+.stock-cnt{position:absolute;bottom:2px;right:4px;font-family:'Orbitron',monospace;font-size:9px;color:rgba(255,255,255,.5);z-index:5;}
+
+/* ── DONE PILES ── */
+.done-pile{
+  width:32px;height:44px;border:2px solid #1e1e1e;border-radius:6px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--surface2);flex-shrink:0;transition:all .3s;
+  font-family:'Orbitron',monospace;font-size:10px;color:#1e1e1e;
+}
+.done-pile.done{border-color:var(--green);color:var(--green);background:rgba(64,192,160,.08);box-shadow:0 0 8px rgba(64,192,160,.2);}
+
+/* ── COLUMN ── */
+.spd-col{position:relative;flex-shrink:0;width:var(--cw);}
+
+/* ── CARD ── */
+.scard{
+  position:absolute;left:0;width:var(--cw);
+  border-radius:6px;overflow:hidden;
+  box-shadow:1px 2px 4px rgba(0,0,0,.5);
+  border:1.5px solid rgba(255,255,255,.15);
+  transition:box-shadow .12s,transform .12s;
+}
+.scard::after{
+  content:'';position:absolute;inset:0;border-radius:5px;
+  background:linear-gradient(140deg,rgba(255,255,255,.18) 0%,transparent 55%);
+  pointer-events:none;
+}
+/* Back */
+.scard.back{
+  background:repeating-linear-gradient(135deg,#122050 0,#122050 6px,#0a1635 6px,#0a1635 12px);
+  border-color:#1e3a7a;cursor:default;
+}
+.scard.back::after{display:none;}
+/* Suits */
+.scard.ss{background:linear-gradient(150deg,#f2f2f2,#dcdcdc);color:#111;}
+.scard.sh{background:linear-gradient(150deg,#fff2f2,#ffe0e0);color:#c01020;}
+.scard.sd{background:linear-gradient(150deg,#fff6ee,#ffe8d0);color:#b04000;}
+.scard.sc{background:linear-gradient(150deg,#f2f6f2,#dceadc);color:#0a4a1a;}
+/* Rank & suit labels */
+.scard .rk{position:absolute;top:3px;left:4px;font-family:'Nunito',sans-serif;font-weight:900;line-height:1;font-size:clamp(12px,calc(var(--cw)*.25),19px);}
+.scard .su{position:absolute;line-height:1;font-size:clamp(9px,calc(var(--cw)*.17),14px);}
+.scard .su.t{top:calc(4px + clamp(12px,calc(var(--cw)*.25),19px));left:4px;}
+.scard .su.b{bottom:calc(3px + clamp(11px,calc(var(--cw)*.23),17px));right:3px;transform:rotate(180deg);}
+.scard .rk.b{position:absolute;bottom:3px;right:3px;font-family:'Nunito',sans-serif;font-weight:900;line-height:1;font-size:clamp(11px,calc(var(--cw)*.23),17px);transform:rotate(180deg);}
+.scard .mid{position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);font-size:clamp(14px,calc(var(--cw)*.3),22px);opacity:.2;line-height:1;pointer-events:none;}
+/* Selected */
+.scard.sel{
+  box-shadow:0 0 0 3px #f0c040,1px 2px 8px rgba(0,0,0,.6)!important;
+  transform:translateY(-4px);
+  z-index:50!important;
+}
+/* Empty slot */
+.spd-empty{
+  position:absolute;top:0;left:0;width:var(--cw);height:var(--ch);
+  border:2px dashed #1e1e1e;border-radius:7px;
+}
+/* DEAL / FLIP ANIMATIONS */
+.spd-col{perspective:760px;}
+@keyframes scDeal{from{opacity:0;transform:translate(-22px,-36px) scale(.8) rotate(-6deg);}to{opacity:1;transform:translate(0,0) scale(1) rotate(0);}}
+@keyframes scFlip{0%{transform:rotateY(84deg) scale(.93);opacity:.2;}55%{opacity:1;}100%{transform:rotateY(0) scale(1);opacity:1;}}
+.scard.deal{animation:scDeal .34s cubic-bezier(.2,1,.35,1) both;}
+.scard.flip{animation:scFlip .32s ease-out both;}
+@media (prefers-reduced-motion: reduce){.scard.deal,.scard.flip{animation:none!important;}}
+/* Hint */
+.hint-bar{text-align:center;font-family:'Orbitron',monospace;font-size:9px;color:#1e1e1e;padding:2px 8px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:var(--green)">🕷️ SPIDER</span>
+  <div class="h-btns">
+    <select id="suits-sel">
+      <option value="1">1 SUIT — Easy</option>
+      <option value="2">2 SUITS — Medium</option>
+      <option value="4">4 SUITS — Hard</option>
+    </select>
+    <div class="info-pill">SCORE: <span id="sc">500</span></div>
+    <div class="info-pill">MOVES: <span id="mv">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+    <button class="hbtn" onclick="undoMove()">↩ UNDO</button>
+  </div>
+</div>
+
+<div class="hint-bar">CLICK card to SELECT (gold) · CLICK column to MOVE · DRAG &amp; DROP also works</div>
+
+<!-- Info bar: stock + done piles -->
+<div class="spd-info">
+  <div class="spd-info-left">
+    <div class="spd-lbl">STOCK<br>PILE</div>
+    <button class="stock-btn" id="stock-btn" onclick="deal()" title="Click to deal 10 cards" type="button" style="background:transparent;cursor:pointer;border:2px dashed #333;"></button>
+    <button class="hbtn" onclick="deal()" style="margin-left:4px;" title="Deal next row">DEAL</button>
+  </div>
+  <div class="spd-info-right">
+    <div class="spd-lbl">COMPLETED<br>SETS</div>
+    <div id="done-piles" style="display:flex;gap:5px;"></div>
+  </div>
+</div>
+
+<!-- Columns -->
+<div class="spd-cols" id="spd-cols"></div>
+
+<div id="win-overlay">
+  <div class="win-msg">🕷️ SPIDER CLEARED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════
+const RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const ri=r=>RANKS.indexOf(r);
+const SUIT_MAP={1:['♠'],2:['♠','♥'],4:['♠','♥','♦','♣']};
+const SUIT_CLS={'♠':'ss','♥':'sh','♦':'sd','♣':'sc'};
+
+// State
+let cols=[],stock=[],done=0,sc=500,mv=0;
+let hist=[];
+// Selection: null or {col,row}
+let SEL=null;
+let dealing=false, dealIdx=0, prevDown=new Set(), prevColIds=new Set();
+// Drag: null or {col,row,cards}
+let DRAG=null;
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+function newGame(){
+  document.getElementById('win-overlay').classList.remove('show');
+  const n=parseInt(document.getElementById('suits-sel').value);
+  const suits=SUIT_MAP[n];
+  done=0;sc=500;mv=0;hist=[];SEL=null;DRAG=null;
+  document.getElementById('sc').textContent=500;
+  document.getElementById('mv').textContent=0;
+
+  // Build 104-card deck cycling through suits
+  const deck=[];
+  for(let i=0;i<104;i++) deck.push({suit:suits[i%suits.length],rank:RANKS[i%13],up:false,id:i});
+  // Shuffle
+  for(let i=deck.length-1;i>0;i--){const j=0|Math.random()*(i+1);[deck[i],deck[j]]=[deck[j],deck[i]];}
+
+  // Deal: cols 0-3 = 6 cards, cols 4-9 = 5 cards (54 total)
+  cols=[];
+  for(let c=0;c<10;c++){
+    const n2=c<4?6:5;
+    const col=[];
+    for(let i=0;i<n2;i++){
+      const card={...deck.pop()};
+      card.up=(i===n2-1); // only top card face-up
+      col.push(card);
+    }
+    cols.push(col);
+  }
+  // Remaining 50 → 5 stock rows of 10
+  stock=[];
+  for(let i=0;i<5;i++){
+    const row=[];
+    for(let j=0;j<10;j++) row.push({...deck.pop(),up:true});
+    stock.push(row);
+  }
+  dealing=true; dealIdx=0; prevDown=new Set(); prevColIds=new Set(); render(); dealing=false;
+}
+
+// ═══════════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════════
+// Is the sequence from row to end of col a valid moveable run?
+// (all face-up, descending by 1, same suit)
+function isValidRun(col,fromRow){
+  const c=cols[col];
+  for(let i=fromRow;i<c.length-1;i++){
+    if(!c[i+1].up) return false;
+    if(c[i+1].suit!==c[i].suit) return false;
+    if(ri(c[i+1].rank)!==ri(c[i].rank)-1) return false;
+  }
+  return true;
+}
+
+// Can we place card on top of col?
+function canPlace(card,col){
+  const c=cols[col];
+  if(!c.length) return true; // empty col accepts anything
+  const top=c[c.length-1];
+  return top.up && ri(card.rank)===ri(top.rank)-1;
+  // Spider allows different suits — only same-suit makes a sequence
+}
+
+// Flip top card of col if face-down (after a move)
+function flipTop(col){
+  const c=cols[col];
+  if(c.length>0 && !c[c.length-1].up){
+    c[c.length-1].up=true;
+  }
+}
+
+// Check if col ends with a complete K→A same-suit run
+function checkComplete(col){
+  const c=cols[col];
+  if(c.length<13) return false;
+  const last=c.slice(-13);
+  for(let i=0;i<13;i++){
+    if(last[i].rank!==RANKS[12-i]) return false;
+    if(last[i].suit!==last[0].suit) return false;
+    if(!last[i].up) return false;
+  }
+  return true;
+}
+
+// ═══════════════════════════════════════════════
+// MOVES
+// ═══════════════════════════════════════════════
+function saveHist(){
+  hist.push({
+    cols:JSON.parse(JSON.stringify(cols)),
+    stock:JSON.parse(JSON.stringify(stock)),
+    done,sc,mv
+  });
+}
+
+function moveCards(fromCol,fromRow,toCol){
+  saveHist();
+  const cards=cols[fromCol].splice(fromRow);
+  // Always flip the new top of the source column
+  flipTop(fromCol);
+  cols[toCol].push(...cards.map(x=>({...x})));
+  sc--;mv++;
+  document.getElementById('sc').textContent=sc;
+  document.getElementById('mv').textContent=mv;
+  // Check if toCol now has a complete set
+  if(checkComplete(toCol)){
+    cols[toCol].splice(-13);
+    flipTop(toCol);
+    done++;sc+=100;
+    document.getElementById('sc').textContent=sc;
+    if(done===8){
+      render();
+      document.getElementById('win-sub').textContent='Score: '+sc+' | Moves: '+mv;
+      setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500);
+      return;
+    }
+  }
+}
+
+function deal(){
+  SEL=null;
+  if(!stock.length){alert('No more cards to deal!');return;}
+  if(cols.some(c=>!c.length)){
+    alert('Fill all empty columns before dealing!');return;
+  }
+  saveHist();
+  const row=stock.pop();
+  row.forEach((card,i)=>{card.up=true;cols[i].push({...card});});
+  mv++;document.getElementById('mv').textContent=mv;
+  for(let c=0;c<10;c++){
+    if(checkComplete(c)){
+      cols[c].splice(-13);flipTop(c);done++;sc+=100;
+      document.getElementById('sc').textContent=sc;
+    }
+  }
+  render();
+  if(done===8){
+    document.getElementById('win-sub').textContent='Score: '+sc+' | Moves: '+mv;
+    setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500);
+  }
+}
+
+function undoMove(){
+  if(!hist.length) return;
+  const s=hist.pop();
+  cols=s.cols;stock=s.stock;done=s.done;sc=s.sc;mv=s.mv;
+  SEL=null;DRAG=null;
+  document.getElementById('sc').textContent=sc;
+  document.getElementById('mv').textContent=mv;
+  render();
+}
+
+// ═══════════════════════════════════════════════
+// CLICK TO MOVE
+// ═══════════════════════════════════════════════
+function cardClick(col,row){
+  const card=cols[col][row];
+  if(!card.up){
+    // Only flip if it's the top card and nothing else to do
+    if(row===cols[col].length-1){
+      saveHist();
+      card.up=true;render();
+    }
+    return;
+  }
+
+  // If something is selected, try to move it here
+  if(SEL!==null){
+    // If clicking the selected card itself → deselect
+    if(SEL.col===col&&SEL.row===row){
+      SEL=null;render();return;
+    }
+    // Try to move selected cards onto this column
+    // Target: we move to this col, placing on top — but we want to move ONTO this card's col
+    const selCards=cols[SEL.col].slice(SEL.row);
+    if(canPlace(selCards[0],col)){
+      // Move onto this column (the card clicked is in this col)
+      const toCol=col;
+      moveCards(SEL.col,SEL.row,toCol);
+      SEL=null;render();return;
+    }
+    // Can't move here — change selection to this card if it's a valid run start
+    if(isValidRun(col,row)){
+      SEL={col,row};render();return;
+    }
+    SEL=null;render();return;
+  }
+
+  // No selection — select this card if it starts a valid run
+  if(isValidRun(col,row)){
+    SEL={col,row};render();
+  }
+}
+
+function colClick(col){
+  // Clicking the column background (empty area below cards)
+  if(SEL===null) return;
+  const selCards=cols[SEL.col].slice(SEL.row);
+  if(canPlace(selCards[0],col)){
+    moveCards(SEL.col,SEL.row,col);
+    SEL=null;render();
+  } else {
+    SEL=null;render();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// DRAG & DROP
+// ═══════════════════════════════════════════════
+function dragStart(e,col,row){
+  if(!isValidRun(col,row)){e.preventDefault();return;}
+  SEL=null;
+  DRAG={col,row,cards:cols[col].slice(row)};
+  e.dataTransfer.setData('text','spd');
+  e.dataTransfer.effectAllowed='move';
+}
+function dragDrop(e,col){
+  e.preventDefault();
+  if(!DRAG) return;
+  const cards=DRAG.cards;
+  if(canPlace(cards[0],col)&&col!==DRAG.col){
+    moveCards(DRAG.col,DRAG.row,col);
+    render();
+  }
+  DRAG=null;
+}
+document.addEventListener('dragend',()=>{DRAG=null;});
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function render(){
+  renderInfoBar();
+  renderCols();
+}
+
+function renderInfoBar(){
+  // Stock button
+  const btn=document.getElementById('stock-btn');
+  btn.innerHTML='';
+  for(let i=0;i<Math.min(stock.length,4);i++){
+    const b=document.createElement('div');
+    b.className='stock-back';
+    b.style.cssText='width:44px;height:60px;top:'+(i*2)+'px;left:'+(i*2)+'px;z-index:'+i+';pointer-events:none;';
+    btn.appendChild(b);
+  }
+  if(!stock.length){
+    const s=document.createElement('span');
+    s.style.cssText='font-family:"Orbitron",monospace;font-size:10px;color:#333;position:relative;z-index:5;';
+    s.textContent='EMPTY';btn.appendChild(s);
+  }
+  const cnt=document.createElement('span');
+  cnt.className='stock-cnt';cnt.textContent=stock.length;cnt.style.pointerEvents='none';btn.appendChild(cnt);
+
+  // Done piles
+  const dp=document.getElementById('done-piles');dp.innerHTML='';
+  for(let i=0;i<8;i++){
+    const d=document.createElement('div');
+    d.className='done-pile'+(i<done?' done':'');
+    if(i<done) d.innerHTML='✓<span style="font-size:8px;display:block;line-height:1;margin-top:1px;">♠</span>';
+    else d.innerHTML='<span style="font-size:12px;opacity:.2;">♠</span>';
+    dp.appendChild(d);
+  }
+}
+
+function renderCols(){
+  const colsEl=document.getElementById('spd-cols');
+  colsEl.innerHTML='';
+  if(dealing) dealIdx=0;
+
+  const cw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cw'))||68;
+  const ch=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ch'))||90;
+  const viewH=Math.max(window.innerHeight-290, 200); // available height for columns
+
+  // Count face-up and face-down cards in tallest column
+  let maxUp=0, maxDn=0;
+  cols.forEach(col=>{
+    let up=0,dn=0;
+    col.forEach((c,i)=>{ if(i<col.length-1){ if(c.up)up++; else dn++; }});
+    if(up>maxUp) maxUp=up;
+    if(dn>maxDn) maxDn=dn;
+  });
+
+  // Solve: stepUp*maxUp + stepDn*maxDn + ch <= viewH
+  // stepDn = stepUp * 0.5, so: stepUp*(maxUp + maxDn*0.5) <= viewH - ch
+  const totalSlots=maxUp+(maxDn*0.5);
+  let stepUp = totalSlots>0 ? Math.floor((viewH-ch)/totalSlots) : 28;
+  stepUp=Math.max(12,Math.min(stepUp,28));
+  const stepDn=Math.max(9,Math.floor(stepUp*0.5));
+
+  const rankFS=Math.max(11,Math.floor(cw*.25))+'px';
+  const suitFS=Math.max(8,Math.floor(cw*.17))+'px';
+  const midFS=Math.max(13,Math.floor(cw*.3))+'px';
+
+  cols.forEach((col,ci)=>{
+    // Column height
+    let colH=ch;
+    if(col.length>0){
+      colH=0;
+      col.forEach((card,ri2)=>{
+        colH+=ri2<col.length-1?(card.up?stepUp:stepDn):ch;
+      });
+    }
+
+    const colEl=document.createElement('div');
+    colEl.className='spd-col';
+    colEl.style.height=colH+'px';
+    colEl.addEventListener('dragover',e=>e.preventDefault());
+    colEl.addEventListener('drop',e=>dragDrop(e,ci));
+    colEl.addEventListener('click',e=>{if(e.target===colEl)colClick(ci);});
+
+    if(!col.length){
+      const em=document.createElement('div');em.className='spd-empty';
+      em.addEventListener('click',()=>colClick(ci));
+      colEl.appendChild(em);
+    }
+
+    let topPx=0;
+    col.forEach((card,ri2)=>{
+      const isTopCard=(ri2===col.length-1);
+      const el=document.createElement('div');
+      el.style.top=topPx+'px';
+      el.style.height=ch+'px';
+      el.style.zIndex=ri2+1;
+
+      if(!card.up){
+        el.className='scard back';
+        // Allow clicking to flip the top face-down card
+        if(isTopCard){
+          el.style.cursor='pointer';
+          el.addEventListener('click',e=>{e.stopPropagation();cardClick(ci,ri2);});
+        }
+      } else {
+        const isSel=SEL!==null&&SEL.col===ci&&ri2>=SEL.row;
+        el.className='scard '+(SUIT_CLS[card.suit]||'ss')+(isSel?' sel':'');
+        if(isSel) el.style.zIndex=50+ri2;
+        el.innerHTML=
+          '<div class="rk">'+card.rank+'</div>'+
+          '<div class="su t">'+card.suit+'</div>'+
+          '<div class="mid">'+card.suit+'</div>'+
+          '<div class="rk b">'+card.rank+'</div>'+
+          '<div class="su b">'+card.suit+'</div>';
+        el.draggable=true;
+        el.addEventListener('dragstart',e=>dragStart(e,ci,ri2));
+        el.addEventListener('click',e=>{e.stopPropagation();cardClick(ci,ri2);});
+      }
+      if(dealing){ el.classList.add('deal'); el.style.animationDelay=(dealIdx++*20)+'ms'; }
+      else if(card.up && (prevDown.has(card.id) || !prevColIds.has(card.id))) el.classList.add('flip');
+      colEl.appendChild(el);
+      topPx+=card.up?stepUp:stepDn;
+    });
+    colsEl.appendChild(colEl);
+  });
+  // record state for next render's flip detection
+  prevDown=new Set(); prevColIds=new Set();
+  cols.forEach(col=>col.forEach(c=>{ prevColIds.add(c.id); if(!c.up) prevDown.add(c.id); }));
+}
+
+newGame();
+</script>
+</body>
+</html>

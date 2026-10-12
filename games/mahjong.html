@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Mahjong Solitaire</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.mj-wrap{display:flex;flex-direction:column;align-items:center;padding:10px;gap:8px;}
+#mj-board{position:relative;transform-origin:top center;}
+.mj-tile{
+  position:absolute;width:44px;height:58px;border-radius:6px;cursor:pointer;
+  background:linear-gradient(160deg,#f2ecdc,#d8d0ba);
+  border:1px solid #a89a78;
+  border-bottom:4px solid #b0a280;border-right:3px solid #baac8a;
+  box-shadow:2px 3px 5px rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;font-size:24px;
+  user-select:none;transition:box-shadow .12s,filter .12s;
+}
+.mj-tile.locked{filter:brightness(.55);cursor:default;}
+.mj-tile.sel{box-shadow:0 0 0 3px var(--accent),2px 3px 8px rgba(0,0,0,.6);filter:brightness(1.1);}
+.mj-tile.hint-glow{box-shadow:0 0 0 3px var(--green),0 0 14px rgba(64,192,160,.6);}
+.mj-stats{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🀄 MAHJONG</span>
+  <div class="h-btns">
+    <div class="info-pill">TILES: <span id="left">144</span></div>
+    <div class="info-pill">PAIRS FREE: <span id="pairs">0</span></div>
+    <button class="hbtn" onclick="hint()">💡 HINT</button>
+    <button class="hbtn" onclick="reshuffle()">🔀 SHUFFLE</button>
+    <button class="hbtn" onclick="undo()">↩ UNDO</button>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+
+<div class="mj-wrap">
+  <div id="mj-board"></div>
+  <div style="font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);letter-spacing:1px;">
+    MATCH FREE PAIRS — A TILE IS FREE IF NOTHING IS ON TOP AND ITS LEFT <i>OR</i> RIGHT SIDE IS OPEN
+  </div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🀄 CLEARED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" id="wo-shuffle" onclick="reshuffle();document.getElementById('win-overlay').classList.remove('show');" style="display:none;">🔀 SHUFFLE REST</button>
+    <button class="win-btn" onclick="newGame()">NEW GAME</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+const FACES=['🐉','🐅','🐦','🌸','🌼','🍀','🎋','🌙','☀️','⭐','🔥','💧','🍎','🍊','🍇','🍒','🐟','🐢','🦋','🐘','🏮','🎐','⛩️','🗻','🎍','🍜','🍵','🧧','🎏','🥠','🀄','🎴','🎲','💮','🈚','🈵'];
+const TILE_W=48,TILE_H=62,OFF=5;
+
+let tiles=[]; // {x,y,z,face,dead}
+let sel=-1,hist=[],hintPair=null;
+
+function turtleLayout(){
+  const P=[];
+  const rows=[12,8,10,12,12,10,8,12];
+  const offs=[0,2,1,0,0,1,2,0];
+  rows.forEach((len,y)=>{for(let i=0;i<len;i++)P.push({x:offs[y]+i,y,z:0});});
+  P.push({x:-1,y:3.5,z:0});           // far left
+  P.push({x:12,y:3.5,z:0});           // right 1
+  P.push({x:13,y:3.5,z:0});           // right 2
+  for(let y=1;y<=6;y++)for(let x=3;x<=8;x++)P.push({x,y,z:1});
+  for(let y=2;y<=5;y++)for(let x=4;x<=7;x++)P.push({x,y,z:2});
+  for(let y=3;y<=4;y++)for(let x=5;x<=6;x++)P.push({x,y,z:3});
+  P.push({x:5.5,y:3.5,z:4});
+  return P; // 84+3+36+16+4+1 = 144
+}
+
+function newGame(){
+  const faces=[];
+  const F=FACES.map(f=>f&&f.length<=4?f:'🎲').slice(0,36);
+  for(let i=0;i<36;i++)for(let k=0;k<4;k++)faces.push(F[i]);
+  for(let i=faces.length-1;i>0;i--){const j=0|Math.random()*(i+1);[faces[i],faces[j]]=[faces[j],faces[i]];}
+  tiles=turtleLayout().map((p,i)=>({...p,face:faces[i],dead:false}));
+  sel=-1;hist=[];hintPair=null;
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('wo-shuffle').style.display='none';
+  render();
+}
+
+function overlap(a,b){return Math.abs(a.x-b.x)<1&&Math.abs(a.y-b.y)<1;}
+
+function isFree(i){
+  const t=tiles[i];
+  if(t.dead)return false;
+  let leftBlocked=false,rightBlocked=false;
+  for(let j=0;j<tiles.length;j++){
+    if(j===i||tiles[j].dead)continue;
+    const o=tiles[j];
+    if(o.z===t.z+1&&overlap(o,t))return false;           // covered
+    if(o.z===t.z&&Math.abs(o.y-t.y)<1){
+      if(o.x<t.x&&o.x>t.x-2)leftBlocked=true;
+      if(o.x>t.x&&o.x<t.x+2)rightBlocked=true;
+    }
+  }
+  return !(leftBlocked&&rightBlocked);
+}
+
+function freePairs(){
+  const free=tiles.map((t,i)=>i).filter(i=>isFree(i));
+  const pairs=[];
+  for(let a=0;a<free.length;a++)for(let b=a+1;b<free.length;b++)
+    if(tiles[free[a]].face===tiles[free[b]].face)pairs.push([free[a],free[b]]);
+  return pairs;
+}
+
+function clickTile(i){
+  if(!isFree(i))return;
+  hintPair=null;
+  if(sel===i){sel=-1;render();return;}
+  if(sel>=0&&tiles[sel].face===tiles[i].face){
+    hist.push([sel,i]);
+    tiles[sel].dead=true;tiles[i].dead=true;
+    sel=-1;
+    render();
+    checkState();
+    return;
+  }
+  sel=i;render();
+}
+
+function undo(){
+  if(!hist.length)return;
+  const[a,b]=hist.pop();
+  tiles[a].dead=false;tiles[b].dead=false;
+  sel=-1;hintPair=null;render();
+}
+
+function hint(){
+  const pairs=freePairs();
+  if(!pairs.length)return;
+  hintPair=pairs[0|Math.random()*pairs.length];
+  render();
+}
+
+function reshuffle(){
+  // shuffle faces among remaining tiles
+  const alive=tiles.filter(t=>!t.dead);
+  const faces=alive.map(t=>t.face);
+  for(let i=faces.length-1;i>0;i--){const j=0|Math.random()*(i+1);[faces[i],faces[j]]=[faces[j],faces[i]];}
+  alive.forEach((t,i)=>t.face=faces[i]);
+  sel=-1;hintPair=null;hist=[];
+  render();
+  checkState();
+}
+
+function checkState(){
+  const left=tiles.filter(t=>!t.dead).length;
+  if(left===0){
+    document.getElementById('win-msg').textContent='🀄 CLEARED!';
+    document.getElementById('win-sub').textContent='All 144 tiles matched!';
+    document.getElementById('wo-shuffle').style.display='none';
+    setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400);
+    return;
+  }
+  if(!freePairs().length){
+    document.getElementById('win-msg').textContent='🧱 NO MOVES LEFT';
+    document.getElementById('win-sub').textContent=left+' tiles remain — shuffle to continue?';
+    document.getElementById('wo-shuffle').style.display='';
+    setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400);
+  }
+}
+
+function render(){
+  const b=document.getElementById('mj-board');
+  b.innerHTML='';
+  // board size
+  const minX=-1,maxX=14,maxY=8;
+  b.style.width=((maxX-minX)*TILE_W)+'px';
+  b.style.height=(maxY*TILE_H+40)+'px';
+
+  const order=[...tiles.keys()].sort((a,b2)=>tiles[a].z-tiles[b2].z||tiles[a].y-tiles[b2].y||tiles[a].x-tiles[b2].x);
+  for(const i of order){
+    const t=tiles[i];
+    if(t.dead)continue;
+    const d=document.createElement('div');
+    d.className='mj-tile'+(isFree(i)?'':' locked')+(sel===i?' sel':'')+(hintPair&&hintPair.includes(i)?' hint-glow':'');
+    d.style.left=((t.x-minX)*TILE_W-t.z*OFF)+'px';
+    d.style.top=(t.y*TILE_H-t.z*OFF)+'px';
+    d.style.zIndex=t.z*100+Math.round(t.y*2)+Math.round(t.x);
+    d.textContent=t.face;
+    d.onclick=()=>clickTile(i);
+    b.appendChild(d);
+  }
+  document.getElementById('left').textContent=tiles.filter(t=>!t.dead).length;
+  document.getElementById('pairs').textContent=freePairs().length;
+
+  // scale to fit viewport width
+  const totalW=(maxX-minX)*TILE_W;
+  const scale=Math.min(1,(window.innerWidth-24)/totalW);
+  b.style.transform='scale('+scale+')';
+  b.style.marginBottom=scale<1?(-(1-scale)*(maxY*TILE_H))+'px':'0';
+}
+window.addEventListener('resize',render);
+
+newGame();
+</script>
+</body>
+</html>

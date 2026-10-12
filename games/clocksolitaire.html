@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clock Solitaire</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.cs-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 10px;}
+.cs-clock{position:relative;width:min(440px,92vw);aspect-ratio:1/1;}
+.cs-pile{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;}
+.cs-lbl{font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);}
+.cs-count{font-family:'Orbitron',monospace;font-size:11px;color:var(--accent);}
+.card{width:48px;height:68px;font-size:16px;} .card .ctop{padding:3px 4px;}
+.cs-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:20px;letter-spacing:1px;text-align:center;}
+.cs-flip{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;padding:12px 24px;border-radius:10px;border:3px solid var(--accent);color:var(--accent);background:var(--surface);cursor:pointer;letter-spacing:1px;}
+.cs-flip:disabled{opacity:.4;cursor:default;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">🕐 ← HUB</a>
+  <span class="h-title" style="color:#5090e0">🕐 CLOCK SOLITAIRE</span>
+  <div class="h-btns"><div class="info-pill">PLACED: <span id="placed">0</span>/52</div><label style="font-family:'Share Tech Mono';font-size:12px;color:var(--dim)"><input type="checkbox" id="auto"> AUTO</label><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="cs-wrap">
+  <div class="cs-msg" id="msg">Flip cards — can you place all 52 before the 4th King?</div>
+  <div class="cs-clock" id="clock"></div>
+  <button class="cs-flip" id="flipBtn" onclick="flip()">🔄 FLIP</button>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='clocksolitaire';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let piles=[], faceUp=[], placed=0, current=12, kings=0, over=false, autoTimer=null;
+// piles[0..11] = clock positions (rank 0..11 i.e. A..Q), piles[12] = center (K). each starts 4 face-down.
+function newGame(){ clearInterval(autoTimer); autoTimer=null;
+  let deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck);
+  piles=Array.from({length:13},()=>[]); for(let p=0;p<13;p++)for(let i=0;i<4;i++)piles[p].push(deck.pop());
+  faceUp=Array.from({length:13},()=>[]); placed=0; current=12; kings=0; over=false;
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('flipBtn').disabled=false;
+  document.getElementById('msg').textContent='Flip to begin from the centre (Kings).';
+  render();
+  document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*16)+'ms';});
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function flip(){
+  if(over) return;
+  if(piles[current].length===0){ return finish(false); } // pile empty but game not done
+  const card=piles[current].pop(); const target=card.r===12?12:card.r; // K->center(12), else rank index
+  faceUp[target].push(card); placed++;
+  current=target; sfx('flip');
+  if(card.r===12){ kings++; if(kings===4 && placed<52){ render(); return finish(false); } }
+  render();
+  if(placed===52){ return finish(true); }
+  if(piles[current].length===0 && placed<52){ render(); return finish(false); }
+}
+function finish(won){ over=true; clearInterval(autoTimer); autoTimer=null; document.getElementById('flipBtn').disabled=true;
+  document.getElementById('win-msg').textContent=won?'🏆 YOU WIN!':'🕐 STUCK';
+  document.getElementById('win-sub').textContent=won?'All 52 cards placed — a rare win!':'Placed '+placed+'/52 before getting stuck.';
+  if(won&&window.GH)GH.score.inc(GAME,'wins',1);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+function cardHTML(card){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function render(){
+  const cl=document.getElementById('clock'); cl.innerHTML='';
+  for(let p=0;p<13;p++){
+    let x,y;
+    if(p===12){ x=50;y=50; } else { const a=Math.PI/180*(p*30-60); x=50+42*Math.cos(a); y=50+42*Math.sin(a); }
+    const d=document.createElement('div'); d.className='cs-pile'; d.style.left=x+'%'; d.style.top=y+'%';
+    const top=faceUp[p].length?cardHTML(faceUp[p][faceUp[p].length-1]):'<div class="card back"></div>';
+    const lbl=p===12?'K':RANKS[p];
+    d.innerHTML='<div class="cs-lbl">'+lbl+'</div>'+top+'<div class="cs-count">'+faceUp[p].length+'↑ '+piles[p].length+'↓</div>';
+    d.style.outline = p===current&&!over? '2px solid var(--accent)':'none'; d.style.borderRadius='8px';
+    cl.appendChild(d);
+  }
+  document.getElementById('placed').textContent=placed;
+}
+document.getElementById('auto').addEventListener('change',function(){ if(this.checked&&!over){ autoTimer=setInterval(()=>{ if(over){clearInterval(autoTimer);return;} flip(); },250); } else { clearInterval(autoTimer); autoTimer=null; } });
+newGame();
+</script>
+</body>
+</html>

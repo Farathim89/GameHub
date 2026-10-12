@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chimp Test</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ch-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 12px;}
+.ch-stats{display:flex;gap:26px;font-family:'Orbitron',monospace;font-size:14px;}
+.ch-stats b{color:var(--accent);font-size:20px;display:block;}
+.ch-board{position:relative;width:min(94vw,520px);height:min(70vw,380px);background:var(--surface);border-radius:14px;border:2px solid var(--border);}
+.ch-c{position:absolute;width:52px;height:52px;border-radius:9px;background:#2a3a6a;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:22px;font-weight:900;cursor:pointer;border:2px solid #5a7ad0;}
+.ch-c.blank{background:#eef3ff;color:transparent;border-color:#eef3ff;}
+.ch-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;letter-spacing:1px;text-align:center;}
+.ch-b{font-family:'Orbitron',monospace;font-size:16px;font-weight:800;padding:12px 40px;border-radius:11px;border:3px solid var(--green);background:var(--green);color:#0a140a;cursor:pointer;letter-spacing:2px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">🐵 CHIMP TEST</span>
+  <div class="h-btns"><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">RESTART</button></div>
+</div>
+<div class="ch-wrap">
+  <div class="ch-stats"><div>NUMBERS<b id="level">4</b></div><div>LIVES<b id="lives">❤️❤️❤️</b></div></div>
+  <div class="ch-board" id="board"></div>
+  <div class="ch-msg" id="msg">Click the squares in order, 1 first. They hide after the first click.</div>
+  <button class="ch-b" id="startBtn" onclick="startLevel()">START</button>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='chimptest';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let count=4, lives=3, next=1, tiles=[], revealed=true, best, over=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+document.getElementById('best').textContent=best;
+function newGame(){ count=4; lives=3; over=false; document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; document.getElementById('level').textContent=count; updLives(); document.getElementById('board').innerHTML=''; document.getElementById('msg').textContent='Click the squares in order, 1 first. They hide after the first click.'; document.getElementById('startBtn').style.display='inline-block'; }
+function updLives(){ document.getElementById('lives').textContent='❤️'.repeat(Math.max(0,lives))||'💀'; }
+function startLevel(){ document.getElementById('startBtn').style.display='none'; next=1; revealed=true; layout(); document.getElementById('level').textContent=count; document.getElementById('msg').textContent='Memorise, then click 1 → '+count+'.'; render(); }
+function layout(){ const board=document.getElementById('board'); const bw=board.clientWidth, bh=board.clientHeight, sz=52, pad=4; tiles=[]; let tries=0;
+  for(let n=1;n<=count;n++){ let x,y,ok,t=0; do{ x=pad+Math.random()*(bw-sz-2*pad); y=pad+Math.random()*(bh-sz-2*pad); ok=tiles.every(p=>Math.abs(p.x-x)>sz+6||Math.abs(p.y-y)>sz+6); t++; }while(!ok&&t<200); tiles.push({n,x,y}); } }
+function render(){ const board=document.getElementById('board'); board.innerHTML=''; tiles.forEach(t=>{ const d=document.createElement('div'); d.className='ch-c'+(revealed?'':' blank'); d.textContent=t.n; d.style.left=t.x+'px'; d.style.top=t.y+'px'; d.dataset.n=t.n; d.onclick=()=>click(t.n,d); board.appendChild(d); }); }
+function click(n,el){ if(over)return;
+  if(n===next){ if(next===1&&revealed){ revealed=false; document.querySelectorAll('.ch-c').forEach(c=>{ if(+c.dataset.n!==1)c.classList.add('blank'); }); document.getElementById('msg').textContent='Keep going…'; }
+    sfx('pop'); el.remove(); next++;
+    if(next>count){ sfx('win'); const strip=count; if(strip>best){ best=strip; if(window.GH)GH.score.best(GAME,'best',best,'high'); document.getElementById('best').textContent=best; } count++; document.getElementById('msg').textContent='Level up! '+count+' numbers.'; setTimeout(startLevel,700); }
+  } else { sfx('error'); lives--; updLives(); if(lives<=0)return finish(); document.getElementById('msg').textContent='Wrong order! '+lives+' lives left. Restarting level.'; next=1; revealed=true; setTimeout(startLevel,600); }
+}
+function finish(){ over=true; document.getElementById('win-msg').textContent='REACHED '+count+' NUMBERS'; document.getElementById('win-sub').textContent='Best '+best+' numbers. '+(best>=8?'Chimp-level memory! 🐵':'Humans struggle past 8!'); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

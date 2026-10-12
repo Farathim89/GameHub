@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Number Memory</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.nm-wrap{display:flex;flex-direction:column;align-items:center;gap:20px;padding:30px 12px;}
+.nm-level{font-family:'Orbitron',monospace;font-size:14px;color:var(--dim);letter-spacing:2px;}
+.nm-num{font-family:'Orbitron',monospace;font-size:clamp(28px,8vw,56px);font-weight:900;letter-spacing:6px;min-height:70px;color:var(--accent);text-align:center;word-break:break-all;}
+.nm-bar{width:min(90%,420px);height:6px;background:var(--surface);border-radius:3px;overflow:hidden;}
+.nm-bar i{display:block;height:100%;background:var(--accent);width:100%;}
+.nm-in{font-family:'Orbitron',monospace;font-size:28px;text-align:center;letter-spacing:6px;width:min(90%,420px);padding:12px;border-radius:10px;background:var(--surface);color:var(--fg);border:3px solid var(--border);}
+.nm-b{font-family:'Orbitron',monospace;font-size:16px;font-weight:800;padding:13px 40px;border-radius:11px;border:3px solid var(--green);background:var(--green);color:#0a140a;cursor:pointer;letter-spacing:2px;}
+.nm-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🔢 NUMBER MEMORY</span>
+  <div class="h-btns"><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">RESTART</button></div>
+</div>
+<div class="nm-wrap">
+  <div class="nm-level" id="level">LEVEL 1</div>
+  <div class="nm-num" id="num"></div>
+  <div class="nm-bar" id="barwrap" style="display:none"><i id="bar"></i></div>
+  <div id="inputArea" style="display:none;text-align:center">
+    <input class="nm-in" id="inp" inputmode="numeric" autocomplete="off"><br><br>
+    <button class="nm-b" onclick="submit()">SUBMIT</button>
+  </div>
+  <button class="nm-b" id="startBtn" onclick="startLevel()">START</button>
+  <div class="nm-msg" id="msg">Memorise the number, then type it back.</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='numbermemory';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let level=1, current='', best;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+document.getElementById('best').textContent=best;
+function newGame(){ level=1; document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; prep(); }
+function prep(){ document.getElementById('level').textContent='LEVEL '+level; document.getElementById('num').textContent=''; document.getElementById('inputArea').style.display='none'; document.getElementById('barwrap').style.display='none'; document.getElementById('startBtn').style.display='inline-block'; document.getElementById('msg').textContent='Memorise the number, then type it back.'; }
+function startLevel(){ document.getElementById('startBtn').style.display='none'; current=''; for(let i=0;i<level;i++)current+=(0|Math.random()*10); sfx('select');
+  document.getElementById('num').textContent=current; document.getElementById('msg').textContent='';
+  const bw=document.getElementById('barwrap'), bar=document.getElementById('bar'); bw.style.display='block'; bar.style.transition='none'; bar.style.width='100%'; bar.getBoundingClientRect();
+  const dur=1600+level*300; bar.style.transition='width '+dur+'ms linear'; bar.style.width='0%';
+  setTimeout(()=>askInput(), dur);
+}
+function askInput(){ document.getElementById('num').textContent=''; document.getElementById('barwrap').style.display='none'; const a=document.getElementById('inputArea'); a.style.display='block'; const inp=document.getElementById('inp'); inp.value=''; inp.focus(); }
+function submit(){ const val=document.getElementById('inp').value.trim();
+  if(val===current){ sfx('win'); level++; if(level-1>best){ best=level-1; if(window.GH)GH.score.best(GAME,'best',best,'high'); document.getElementById('best').textContent=best; } prep(); }
+  else { sfx('lose'); finish(val); }
+}
+function finish(val){ const reached=level-1; document.getElementById('win-msg').textContent='REACHED LEVEL '+level; document.getElementById('win-sub').textContent='The number was '+current+' — you typed '+(val||'nothing')+'. Best level '+best+'.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+document.getElementById('inp').addEventListener('keydown',e=>{ if(e.key==='Enter')submit(); });
+newGame();
+</script>
+</body>
+</html>

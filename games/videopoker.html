@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video Poker</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.vp-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 12px;}
+.vp-pay{font-family:'Share Tech Mono',monospace;font-size:12px;border-collapse:collapse;background:var(--surface);border:2px solid var(--border);border-radius:8px;overflow:hidden;}
+.vp-pay td{padding:3px 12px;border-bottom:1px solid var(--border);}
+.vp-pay td:last-child{text-align:right;color:var(--accent);}
+.vp-pay tr.hit{background:rgba(240,192,64,.18);}
+.vp-hand{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.vp-slot{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.card{width:72px;height:102px;font-size:26px;cursor:pointer;} .card .ctop{padding:5px 7px;}
+.card.held{box-shadow:0 0 0 3px var(--green);transform:translateY(-6px);}
+.vp-hold{font-family:'Orbitron',monospace;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--green);min-height:14px;}
+.vp-msg{font-family:'Orbitron',monospace;font-size:17px;font-weight:700;min-height:24px;letter-spacing:1px;text-align:center;}
+.vp-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;}
+.vp-btn{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:12px 24px;border-radius:9px;border:3px solid var(--accent);color:var(--accent);background:var(--surface);cursor:pointer;letter-spacing:1px;}
+.vp-btn:disabled{opacity:.4;cursor:default;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">🂡 ← HUB</a>
+  <span class="h-title" style="color:#f0c040">🎰 VIDEO POKER</span>
+  <div class="h-btns">
+    <div class="info-pill">💰 <span id="credits">100</span></div>
+    <div class="info-pill">BET: <span id="bet">1</span></div>
+    <button class="hbtn" onclick="changeBet()">BET +</button>
+  </div>
+</div>
+<div class="vp-wrap">
+  <table class="vp-pay" id="paytable"></table>
+  <div class="vp-msg" id="msg">Jacks or Better — press DEAL</div>
+  <div class="vp-hand" id="hand"></div>
+  <div class="vp-controls">
+    <button class="vp-btn" id="deal-btn" onclick="dealOrDraw()">▶ DEAL</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💸 OUT OF CREDITS</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="resetBank()">NEW BANK (100)</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='videopoker';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const PAY={ 'Royal Flush':250,'Straight Flush':50,'Four of a Kind':25,'Full House':9,'Flush':6,'Straight':4,'Three of a Kind':3,'Two Pair':2,'Jacks or Better':1 };
+const PAYORDER=Object.keys(PAY);
+let deck=[], hand=[], held=[false,false,false,false,false], credits, bet=1, phase='bet';
+let animSet=null; // 'all' on deal, Set of indices on draw
+credits=(window.GH?GH.score.get(GAME,'credits'):null); if(credits==null||credits<=0)credits=100;
+
+function buildPay(){
+  const t=document.getElementById('paytable');
+  t.innerHTML=PAYORDER.map(k=>`<tr data-k="${k}"><td>${k}</td><td>${PAY[k]*bet}</td></tr>`).join('');
+}
+function render(){
+  document.getElementById('credits').textContent=credits;
+  document.getElementById('bet').textContent=bet;
+  const h=document.getElementById('hand'); h.innerHTML='';
+  hand.forEach((card,i)=>{
+    const slot=document.createElement('div'); slot.className='vp-slot';
+    const red=card.s===1||card.s===2;
+    slot.innerHTML=`<div class="card ${red?'red':'black'} ${held[i]?'held':''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div><div class="vp-hold">${held[i]?'HELD':''}</div>`;
+    if(phase==='draw'){ slot.querySelector('.card').onclick=()=>toggleHold(i); }
+    h.appendChild(slot);
+  });
+  if(animSet){ const cards=h.querySelectorAll('.card'); let d=0; cards.forEach(function(c,i){ if(animSet==='all'||animSet.has(i)){ c.classList.add(animSet==='all'?'gh-deal':'gh-flip'); c.style.animationDelay=(d++*70)+'ms'; } }); animSet=null; }
+  buildPay();
+}
+function changeBet(){ if(phase!=='bet'&&phase!=='result')return; bet=bet%5+1; render(); }
+function toggleHold(i){ if(phase!=='draw')return; held[i]=!held[i]; sfx('select'); render(); }
+function dealOrDraw(){
+  if(phase==='bet'||phase==='result'){
+    if(credits<bet){ return bust(); }
+    credits-=bet; deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck);
+    hand=deck.splice(0,5); held=[false,false,false,false,false]; phase='draw';
+    document.getElementById('msg').textContent='Tap cards to HOLD, then DRAW';
+    document.getElementById('deal-btn').textContent='🔄 DRAW';
+    animSet='all'; sfx('flip'); render();
+  } else if(phase==='draw'){
+    animSet=new Set(); for(let i=0;i<5;i++) if(!held[i]){ hand[i]=deck.pop(); animSet.add(i); }
+    phase='result'; sfx('flip');
+    const res=evaluate(hand);
+    highlightPay(res);
+    if(res){ const win=PAY[res]*bet; credits+=win; document.getElementById('msg').textContent='🎉 '+res+' — WON '+win+'!'; sfx('win'); }
+    else { document.getElementById('msg').textContent='No win — try again.'; }
+    document.getElementById('deal-btn').textContent='▶ DEAL';
+    if(window.GH)GH.score.set(GAME,'credits',credits);
+    render();
+    if(res) highlightPay(res);
+    if(credits<=0) setTimeout(bust,600);
+  }
+}
+function highlightPay(res){ document.querySelectorAll('.vp-pay tr').forEach(tr=>tr.classList.toggle('hit',tr.dataset.k===res)); }
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function evaluate(h){
+  const ranks=h.map(c=>c.r).sort((a,b)=>a-b);
+  const suits=h.map(c=>c.s);
+  const flush=suits.every(s=>s===suits[0]);
+  // straight: consecutive, with A-high (10,J,Q,K,A) and A-low (A,2,3,4,5)
+  const uniq=[...new Set(ranks)];
+  const key=JSON.stringify(ranks);
+  let straight=false, royal=false;
+  if(uniq.length===5){
+    if(ranks[4]-ranks[0]===4) straight=true;             // normal run
+    if(key===JSON.stringify([0,1,2,3,12])) straight=true; // A-2-3-4-5 (wheel)
+    if(key===JSON.stringify([0,9,10,11,12])){ straight=true; royal=true; } // 10-J-Q-K-A (broadway)
+  }
+  const counts={}; ranks.forEach(r=>counts[r]=(counts[r]||0)+1);
+  const cv=Object.values(counts).sort((a,b)=>b-a);
+  if(flush&&royal) return 'Royal Flush';
+  if(flush&&straight) return 'Straight Flush';
+  if(cv[0]===4) return 'Four of a Kind';
+  if(cv[0]===3&&cv[1]===2) return 'Full House';
+  if(flush) return 'Flush';
+  if(straight) return 'Straight';
+  if(cv[0]===3) return 'Three of a Kind';
+  if(cv[0]===2&&cv[1]===2) return 'Two Pair';
+  if(cv[0]===2){ // pair — only pays if J,Q,K,A (ranks 10,11,12,0)
+    const pairRank=+Object.keys(counts).find(r=>counts[r]===2);
+    if(pairRank===0||pairRank>=10) return 'Jacks or Better';
+  }
+  return null;
+}
+function bust(){
+  phase='bet';
+  document.getElementById('win-sub').textContent='The house always... offers a fresh bank.';
+  document.getElementById('win-overlay').classList.add('show');
+}
+function resetBank(){ credits=100; if(window.GH)GH.score.set(GAME,'credits',100); phase='bet'; document.getElementById('win-overlay').classList.remove('show'); document.getElementById('msg').textContent='Jacks or Better — press DEAL'; document.getElementById('deal-btn').textContent='▶ DEAL'; hand=[]; render(); }
+render();
+</script>
+</body>
+</html>

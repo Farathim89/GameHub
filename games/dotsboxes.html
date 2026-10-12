@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dots and Boxes</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.db-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+.db-score{display:flex;gap:26px;}
+.db-s{font-family:'Orbitron',monospace;text-align:center;}
+.db-s .v{font-size:28px;font-weight:900;}
+.db-s .l{font-size:11px;color:var(--dim);letter-spacing:2px;}
+#dbcanvas{background:var(--surface);border:2px solid var(--border);border-radius:12px;touch-action:manipulation;cursor:pointer;max-width:100%;}
+.db-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;min-height:20px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">⬛ DOTS &amp; BOXES</span>
+  <div class="h-btns">
+    <select id="mode-sel" onchange="newGame()">
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai" selected>VS AI</option>
+    </select>
+    <select id="size-sel" onchange="newGame()">
+      <option value="3">3×3</option>
+      <option value="4" selected>4×4</option>
+      <option value="5">5×5</option>
+    </select>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="db-wrap">
+  <div class="db-score">
+    <div class="db-s" style="color:#5090e0"><div class="v" id="s0">0</div><div class="l" id="l0">YOU</div></div>
+    <div class="db-s" style="color:#e05050"><div class="v" id="s1">0</div><div class="l" id="l1">AI</div></div>
+  </div>
+  <div class="db-hint" id="hint">Your turn — click a line between two dots.</div>
+  <canvas id="dbcanvas" width="420" height="420"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='dotsboxes';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('dbcanvas'), ctx=cv.getContext('2d');
+let B=4, mode='ai', margin=40, gap=0;
+let H=[], V=[], owner=[], turn=0, scores=[0,0], over=false, busy=false;
+// H[r][c] horizontal edge above-row r (r:0..B, c:0..B-1); V[r][c] vertical edge (r:0..B-1, c:0..B)
+
+function newGame(){
+  B=parseInt(document.getElementById('size-sel').value,10);
+  mode=document.getElementById('mode-sel').value;
+  H=Array.from({length:B+1},()=>Array(B).fill(0));
+  V=Array.from({length:B},()=>Array(B+1).fill(0));
+  owner=Array.from({length:B},()=>Array(B).fill(-1));
+  turn=0; scores=[0,0]; over=false; busy=false;
+  document.getElementById('l0').textContent='YOU';
+  document.getElementById('l1').textContent= mode==='ai'?'AI':'P2';
+  document.getElementById('win-overlay').classList.remove('show');
+  layout(); draw(); updateScore(); setHint();
+}
+function layout(){
+  const size=Math.min(window.innerWidth-40,440);
+  cv.width=size; cv.height=size;
+  gap=(size-margin*2)/B;
+}
+function dotXY(r,c){ return [margin+c*gap, margin+r*gap]; }
+
+function sidesOf(r,c){ return H[r][c]+H[r+1][c]+V[r][c]+V[r][c+1]; }
+function edgeList(){ // all playable edges as {type,r,c}
+  const out=[];
+  for(let r=0;r<=B;r++)for(let c=0;c<B;c++) if(!H[r][c]) out.push({t:'h',r,c});
+  for(let r=0;r<B;r++)for(let c=0;c<=B;c++) if(!V[r][c]) out.push({t:'v',r,c});
+  return out;
+}
+function playEdge(e,player){
+  if(e.t==='h') H[e.r][e.c]=1; else V[e.r][e.c]=1;
+  // check boxes touching this edge
+  let claimed=0;
+  const boxes = e.t==='h' ? [[e.r-1,e.c],[e.r,e.c]] : [[e.r,e.c-1],[e.r,e.c]];
+  for(const [br,bc] of boxes){ if(br<0||br>=B||bc<0||bc>=B)continue; if(owner[br][bc]<0 && sidesOf(br,bc)===4){ owner[br][bc]=player; scores[player]++; claimed++; } }
+  return claimed;
+}
+function clickCanvas(x,y){
+  if(over||busy||(mode==='ai'&&turn===1)) return;
+  const e=nearestEdge(x,y);
+  if(!e) return;
+  doMove(e);
+}
+function doMove(e){
+  const claimed=playEdge(e, turn);
+  sfx(claimed?'place':'move');
+  draw(); updateScore();
+  if(boardFull()) return endGame();
+  if(!claimed){ turn=1-turn; }
+  setHint();
+  if(mode==='ai' && turn===1 && !over){ busy=true; setTimeout(aiMove,480); }
+}
+function aiMove(){
+  const e=chooseAI();
+  const claimed=playEdge(e,1);
+  sfx(claimed?'place':'move');
+  draw(); updateScore();
+  if(boardFull()){ busy=false; return endGame(); }
+  if(claimed && !boardFull()){ setTimeout(aiMove,420); return; } // AI goes again
+  turn=0; busy=false; setHint();
+}
+function chooseAI(){
+  const edges=edgeList();
+  // 1) completing move
+  for(const e of edges){ if(completes(e)) return e; }
+  // 2) safe move (doesn't create a 3-sided box)
+  const safe=edges.filter(e=>!createsThree(e));
+  if(safe.length) return safe[0|Math.random()*safe.length];
+  // 3) forced: give away smallest chain — just pick random
+  return edges[0|Math.random()*edges.length];
+}
+function completes(e){ return countClaim(e)>0; }
+function countClaim(e){
+  const boxes = e.t==='h' ? [[e.r-1,e.c],[e.r,e.c]] : [[e.r,e.c-1],[e.r,e.c]];
+  let n=0; for(const [br,bc] of boxes){ if(br<0||br>=B||bc<0||bc>=B)continue; if(owner[br][bc]<0 && sidesOf(br,bc)===3) n++; } return n;
+}
+function createsThree(e){
+  const boxes = e.t==='h' ? [[e.r-1,e.c],[e.r,e.c]] : [[e.r,e.c-1],[e.r,e.c]];
+  for(const [br,bc] of boxes){ if(br<0||br>=B||bc<0||bc>=B)continue; if(owner[br][bc]<0 && sidesOf(br,bc)===2) return true; }
+  return false;
+}
+function boardFull(){ for(let r=0;r<B;r++)for(let c=0;c<B;c++)if(owner[r][c]<0)return false; return true; }
+function nearestEdge(x,y){
+  let best=null, bd=18;
+  for(let r=0;r<=B;r++)for(let c=0;c<B;c++){ if(H[r][c])continue; const [x1,y1]=dotXY(r,c),[x2,y2]=dotXY(r,c+1); const d=distSeg(x,y,x1,y1,x2,y2); if(d<bd){bd=d;best={t:'h',r,c};} }
+  for(let r=0;r<B;r++)for(let c=0;c<=B;c++){ if(V[r][c])continue; const [x1,y1]=dotXY(r,c),[x2,y2]=dotXY(r+1,c); const d=distSeg(x,y,x1,y1,x2,y2); if(d<bd){bd=d;best={t:'v',r,c};} }
+  return best;
+}
+function distSeg(px,py,x1,y1,x2,y2){ const dx=x2-x1,dy=y2-y1; const t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/(dx*dx+dy*dy))); const cx=x1+t*dx,cy=y1+t*dy; return Math.hypot(px-cx,py-cy); }
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // claimed boxes
+  for(let r=0;r<B;r++)for(let c=0;c<B;c++){ if(owner[r][c]>=0){ const [x,y]=dotXY(r,c); ctx.fillStyle=owner[r][c]===0?'rgba(80,144,224,.28)':'rgba(224,80,80,.28)'; ctx.fillRect(x,y,gap,gap);
+    ctx.fillStyle=owner[r][c]===0?'#5090e0':'#e05050'; ctx.font='bold '+(gap*0.4)+'px Orbitron,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(owner[r][c]===0?(mode==='ai'?'●':'1'):(mode==='ai'?'◆':'2'),x+gap/2,y+gap/2); } }
+  // edges
+  ctx.lineWidth=5; ctx.lineCap='round';
+  for(let r=0;r<=B;r++)for(let c=0;c<B;c++){ if(H[r][c]){ const [x1,y1]=dotXY(r,c),[x2,y2]=dotXY(r,c+1); ctx.strokeStyle='#d0d0d8'; ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke(); } }
+  for(let r=0;r<B;r++)for(let c=0;c<=B;c++){ if(V[r][c]){ const [x1,y1]=dotXY(r,c),[x2,y2]=dotXY(r+1,c); ctx.strokeStyle='#d0d0d8'; ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke(); } }
+  // dots
+  ctx.fillStyle='#f0c040';
+  for(let r=0;r<=B;r++)for(let c=0;c<=B;c++){ const [x,y]=dotXY(r,c); ctx.beginPath();ctx.arc(x,y,4,0,7);ctx.fill(); }
+}
+function updateScore(){ document.getElementById('s0').textContent=scores[0]; document.getElementById('s1').textContent=scores[1]; }
+function setHint(){ if(over)return; const you=turn===0; document.getElementById('hint').textContent = (mode==='ai'? (you?'Your turn — click a line.':'🤖 AI is thinking…') : 'Player '+(turn+1)+' — click a line.'); }
+function endGame(){
+  over=true;
+  const youWin=scores[0]>scores[1], tie=scores[0]===scores[1];
+  if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent = tie?'🤝 TIE!':(youWin?(mode==='ai'?'🏆 YOU WIN!':'🏆 PLAYER 1 WINS!'):(mode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!'));
+  document.getElementById('win-sub').textContent='Final '+scores[0]+' — '+scores[1];
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+cv.addEventListener('click',e=>{ const rect=cv.getBoundingClientRect(); clickCanvas((e.clientX-rect.left)*(cv.width/rect.width),(e.clientY-rect.top)*(cv.height/rect.height)); });
+window.addEventListener('resize',()=>{ layout(); draw(); });
+newGame();
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pente</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.pn-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px;}
+.pn-board{display:grid;background:linear-gradient(145deg,#caa066,#b0864a);border:3px solid #7a5a2a;border-radius:8px;padding:6px;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.pn-cell{position:relative;cursor:pointer;box-sizing:border-box;border-right:1px solid rgba(60,40,10,.4);border-bottom:1px solid rgba(60,40,10,.4);}
+.pn-stone{position:absolute;inset:12%;border-radius:50%;}
+.pn-stone.b{background:radial-gradient(circle at 34% 30%,#555,#000);} .pn-stone.w{background:radial-gradient(circle at 34% 30%,#fff,#bbb);}
+.pn-stone.last{outline:2px solid var(--accent);border-radius:50%;}
+.pn-status{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;min-height:20px;}
+.pn-caps{display:flex;gap:18px;font-family:'Orbitron',monospace;font-size:12px;}
+.pn-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:440px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">⚫ PENTE</span>
+  <div class="h-btns"><select id="mode-sel" onchange="newGame()"><option value="2p">2 PLAYERS</option><option value="ai" selected>VS AI</option></select><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="pn-wrap">
+  <div class="pn-status" id="status">⚫ Your turn</div>
+  <div class="pn-caps"><span style="color:#111">● pairs: <span id="cap0">0</span>/5</span><span style="color:#5090e0">○ pairs: <span id="cap1">0</span>/5</span></div>
+  <div class="pn-hint">Get <b>5 in a row</b>, or capture <b>5 pairs</b>. Flank exactly two of the enemy (●○○● ) to capture them!</div>
+  <div id="board" class="pn-board"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='pente';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SZ=13; const DIRS=[[0,1],[1,0],[1,1],[1,-1],[0,-1],[-1,0],[-1,-1],[-1,1]];
+let bd=[], turn='b', over=false, mode='ai', last=-1, caps={b:0,w:0}, busy=false;
+function newGame(){ mode=document.getElementById('mode-sel').value; bd=Array(SZ*SZ).fill(0); turn='b'; over=false; last=-1; caps={b:0,w:0}; busy=false;
+  document.getElementById('win-overlay').classList.remove('show'); render(); status(); updateCaps(); }
+function idx(r,c){return r*SZ+c;} function inB(r,c){return r>=0&&r<SZ&&c>=0&&c<SZ;}
+function place(p){ if(over||busy||bd[p])return; if(mode==='ai'&&turn==='w')return; doPlace(p,turn==='b'?1:2); if(over)return; if(mode==='ai'&&turn==='w'){busy=true;status();setTimeout(aiMove,300);} }
+function doPlace(p,who){
+  bd[p]=who; last=p; const r=(p/SZ)|0,c=p%SZ; const opp=who===1?2:1;
+  // captures: for each dir, who,opp,opp,who
+  for(const [dr,dc] of DIRS){ const r1=r+dr,c1=c+dc,r2=r+2*dr,c2=c+2*dc,r3=r+3*dr,c3=c+3*dc;
+    if(inB(r3,c3)&&bd[idx(r1,c1)]===opp&&bd[idx(r2,c2)]===opp&&bd[idx(r3,c3)]===who){ bd[idx(r1,c1)]=0; bd[idx(r2,c2)]=0; caps[who===1?'b':'w']+=1; sfx('hit'); } }
+  render(); updateCaps();
+  if(checkWin(p,who)||caps[who===1?'b':'w']>=5){ return endGame(who); }
+  if(bd.every(v=>v)){ return endGame(0); }
+  turn=turn==='b'?'w':'b'; status();
+}
+function checkWin(p,who){ const r=(p/SZ)|0,c=p%SZ; for(const [dr,dc] of [[0,1],[1,0],[1,1],[1,-1]]){ let n=1; for(let s=1;s<5;s++){const rr=r+dr*s,cc=c+dc*s;if(inB(rr,cc)&&bd[idx(rr,cc)]===who)n++;else break;} for(let s=1;s<5;s++){const rr=r-dr*s,cc=c-dc*s;if(inB(rr,cc)&&bd[idx(rr,cc)]===who)n++;else break;} if(n>=5)return true; } return false; }
+function aiMove(){ const p=best(2); busy=false; if(p<0){endGame(0);return;} doPlace(p,2); }
+function lineScore(p,who){ const r=(p/SZ)|0,c=p%SZ; let sc=0; for(const [dr,dc] of [[0,1],[1,0],[1,1],[1,-1]]){ let cnt=1,open=0; let s=1; while(s<5){const rr=r+dr*s,cc=c+dc*s;if(inB(rr,cc)&&bd[idx(rr,cc)]===who){cnt++;s++;}else{if(inB(rr,cc)&&bd[idx(rr,cc)]===0)open++;break;}} s=1; while(s<5){const rr=r-dr*s,cc=c-dc*s;if(inB(rr,cc)&&bd[idx(rr,cc)]===who){cnt++;s++;}else{if(inB(rr,cc)&&bd[idx(rr,cc)]===0)open++;break;}} if(cnt>=5)sc+=1e6; else if(cnt===4)sc+=open>=1?5e4:3e3; else if(cnt===3)sc+=open>=2?6e3:600; else if(cnt===2)sc+=open>=2?400:80; else sc+=open>=1?15:0; }
+  // capture bonus: placing here captures?
+  const opp=who===1?2:1; for(const [dr,dc] of DIRS){ const r1=r+dr,c1=c+dc,r2=r+2*dr,c2=c+2*dc,r3=r+3*dr,c3=c+3*dc; if(inB(r3,c3)&&bd[idx(r1,c1)]===opp&&bd[idx(r2,c2)]===opp&&bd[idx(r3,c3)]===who)sc+=4000; }
+  return sc; }
+function best(who){ const opp=who===1?2:1; if(bd.every(v=>!v))return idx((SZ/2)|0,(SZ/2)|0); const near=new Set(); for(let p=0;p<bd.length;p++)if(bd[p]){const r=(p/SZ)|0,c=p%SZ;for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){const rr=r+dr,cc=c+dc;if(inB(rr,cc)&&!bd[idx(rr,cc)])near.add(idx(rr,cc));}} let bp=-1,bv=-1; near.forEach(p=>{const v=Math.max(lineScore(p,who),lineScore(p,opp)*0.9); if(v>bv){bv=v;bp=p;}}); return bp; }
+function endGame(who){ over=true; busy=false; const msg=who===0?'🤝 DRAW':(who===1?'⚫ BLACK WINS!':'⚪ WHITE WINS!'); document.getElementById('status').textContent=msg;
+  document.getElementById('win-msg').textContent=who===0?'🤝 DRAW':'🏆 '+(who===1?'BLACK':'WHITE')+' WINS!'; document.getElementById('win-sub').textContent=mode==='ai'?(who===1?'You win!':who===2?'The AI wins.':''):''; if(who===1&&mode==='ai'&&window.GH)GH.score.inc(GAME,'wins',1); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),350); }
+function status(){ if(over)return; const el=document.getElementById('status'); el.textContent=busy?'🤖 AI thinking…':(turn==='b'?'⚫ '+(mode==='ai'?'Your':'Black')+' turn':'⚪ '+(mode==='ai'?'AI':'White')+' turn'); }
+function updateCaps(){ document.getElementById('cap0').textContent=caps.b; document.getElementById('cap1').textContent=caps.w; }
+function render(){ const b=document.getElementById('board'); const avail=Math.min(window.innerWidth-28,window.innerHeight-200,560); const cell=Math.floor(avail/SZ); b.style.gridTemplateColumns=`repeat(${SZ},${cell}px)`; b.innerHTML=''; for(let p=0;p<SZ*SZ;p++){ const d=document.createElement('div'); d.className='pn-cell'; d.style.width=cell+'px'; d.style.height=cell+'px'; if(bd[p]){const s=document.createElement('div');s.className='pn-stone '+(bd[p]===1?'b':'w')+(p===last?' last':'');d.appendChild(s);} d.onclick=()=>place(p); b.appendChild(d); } }
+window.addEventListener('resize',()=>{ if(bd.length)render(); });
+newGame();
+</script>
+</body>
+</html>

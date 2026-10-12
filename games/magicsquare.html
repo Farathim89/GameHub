@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Magic Square</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<script src="../themes/themes.js" defer></script><link rel="stylesheet" href="../themes/themes.css">
+<script src="../lang/lang.js" defer></script>
+<style>
+.ms-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.ms-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:440px;line-height:1.6;}
+.ms-target{font-family:'Orbitron',monospace;font-size:16px;}.ms-target b{color:var(--accent);font-size:24px;}
+.ms-board{display:grid;gap:4px;background:var(--border);padding:4px;border-radius:10px;}
+.ms-c{display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;border-radius:6px;background:var(--surface2);}
+.ms-c.given{background:#2a2a40;color:var(--accent);}
+.ms-c input{width:100%;height:100%;border:none;background:transparent;color:var(--fg);text-align:center;font-family:'Orbitron',monospace;font-weight:900;font-size:inherit;outline:none;}
+.ms-c.good{background:rgba(63,185,80,.25);}
+.ms-sum{font-family:'Orbitron',monospace;font-size:13px;}
+.ms-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;letter-spacing:1px;text-align:center;}
+.ms-pool{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🔳 MAGIC SQUARE</span>
+  <div class="h-btns"><select id="size-sel" onchange="newGame()"><option value="3" selected>3×3</option><option value="4">4×4</option></select><button class="hbtn" onclick="clearAll()">CLEAR</button><button class="hbtn" onclick="newGame()">NEW</button></div>
+</div>
+<div class="ms-wrap">
+  <div class="ms-hint">Fill the grid with the numbers <b>1…N²</b>, each used once, so every row, column and diagonal adds up to the magic total.</div>
+  <div class="ms-target">MAGIC TOTAL: <b id="target">15</b></div>
+  <div class="ms-board" id="board"></div>
+  <div class="ms-pool" id="pool"></div>
+  <div class="ms-msg" id="msg"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='magicsquare';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let N=3, sol=[], given=[], grid=[], target=0, over=false;
+function magic3(){ return [[2,7,6],[9,5,1],[4,3,8]]; }
+function magic4(){ return [[1,15,14,4],[12,6,7,9],[8,10,11,5],[13,3,2,16]]; }
+function rotate(m){ const n=m.length; const r=Array.from({length:n},()=>Array(n).fill(0)); for(let i=0;i<n;i++)for(let j=0;j<n;j++)r[j][n-1-i]=m[i][j]; return r; }
+function reflect(m){ return m.map(row=>[...row].reverse()); }
+function randomTransform(m){ let x=m; const rots=0|Math.random()*4; for(let i=0;i<rots;i++)x=rotate(x); if(Math.random()<0.5)x=reflect(x); return x; }
+function newGame(){ N=parseInt(document.getElementById('size-sel').value,10); over=false; document.getElementById('win-overlay').classList.remove('show');
+  sol=randomTransform(N===3?magic3():magic4()); target=N*(N*N+1)/2; document.getElementById('target').textContent=target;
+  // reveal some cells
+  const total=N*N, revealCount=N===3?4:7; const idx=[...Array(total).keys()]; for(let i=idx.length-1;i>0;i--){const j=0|Math.random()*(i+1);[idx[i],idx[j]]=[idx[j],idx[i]];}
+  const rev=new Set(idx.slice(0,revealCount)); given=Array.from({length:N},()=>Array(N).fill(false)); grid=Array.from({length:N},()=>Array(N).fill(0));
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const k=r*N+c; if(rev.has(k)){ given[r][c]=true; grid[r][c]=sol[r][c]; } }
+  render(); setMsg(''); }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function clearAll(){ if(over)return; for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(!given[r][c])grid[r][c]=0; render(); }
+function render(){ const b=document.getElementById('board'); const sz=Math.floor(Math.min(window.innerWidth-50,360)/N); b.style.gridTemplateColumns='repeat('+N+','+sz+'px)'; b.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const d=document.createElement('div'); d.className='ms-c'+(given[r][c]?' given':''); d.style.width=sz+'px'; d.style.height=sz+'px'; d.style.fontSize=(sz*0.4)+'px';
+    if(given[r][c]){ d.textContent=sol[r][c]; } else { const inp=document.createElement('input'); inp.inputMode='numeric'; inp.value=grid[r][c]||''; inp.maxLength=String(N*N).length; inp.oninput=()=>{ let v=parseInt(inp.value,10); if(isNaN(v)||v<1||v>N*N){ inp.value=inp.value.replace(/[^0-9]/g,''); if(inp.value==='')grid[r][c]=0; return; } grid[r][c]=v; check(); }; d.appendChild(inp); }
+    b.appendChild(d); }
+  // pool of unused numbers
+  const used=new Set(); for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(grid[r][c])used.add(grid[r][c]); const left=[]; for(let i=1;i<=N*N;i++)if(!used.has(i))left.push(i);
+  document.getElementById('pool').textContent=left.length?('Remaining: '+left.join('  ')):'All numbers placed';
+}
+function lineSum(cells){ return cells.reduce((a,v)=>a+v,0); }
+function check(){ // all filled + all lines == target + each number once
+  const vals=[]; for(let r=0;r<N;r++)for(let c=0;c<N;c++){ if(!grid[r][c])return render(); vals.push(grid[r][c]); }
+  render(); const s=new Set(vals); if(s.size!==N*N){ setMsg('Each number 1–'+(N*N)+' must appear exactly once.'); return; }
+  for(let r=0;r<N;r++)if(lineSum(grid[r])!==target){ setMsg('Rows must all total '+target+'.'); return; }
+  for(let c=0;c<N;c++){ let sum=0; for(let r=0;r<N;r++)sum+=grid[r][c]; if(sum!==target){ setMsg('Columns must all total '+target+'.'); return; } }
+  let d1=0,d2=0; for(let i=0;i<N;i++){ d1+=grid[i][i]; d2+=grid[i][N-1-i]; } if(d1!==target||d2!==target){ setMsg('Diagonals must total '+target+'.'); return; }
+  win();
+}
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='Every line totals '+target+'! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250); }
+window.addEventListener('resize',()=>{ if(sol.length)render(); });
+newGame();
+</script>
+</body>
+</html>

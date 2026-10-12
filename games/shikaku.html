@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shikaku</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<script src="../themes/themes.js" defer></script><link rel="stylesheet" href="../themes/themes.css">
+<script src="../lang/lang.js" defer></script>
+<style>
+.sk-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.sk-grid{display:grid;gap:2px;background:#222;padding:3px;border-radius:8px;border:2px solid var(--border);}
+.sk-cell{background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;cursor:pointer;position:relative;}
+.sk-cell.clue{color:var(--accent);}
+.sk-cell.first{box-shadow:inset 0 0 0 3px var(--accent);}
+.sk-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">▭ SHIKAKU</span>
+  <div class="h-btns"><select id="size-sel" onchange="newGame()"><option value="5" selected>5×5</option><option value="7">7×7</option><option value="9">9×9</option></select><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="sk-wrap">
+  <div class="sk-hint">Divide the grid into rectangles — each must contain exactly <b>one number</b> equal to its <b>area</b>. Click two opposite corners to draw a rectangle (click a filled cell twice to clear it).</div>
+  <div id="grid" class="sk-grid"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='shikaku';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const COLORS=['#5090e0','#40c0a0','#c080e0','#f0a040','#e05050','#50d0d0','#a0e050','#f090c0','#f0c040'];
+let N=5, clue=[], owner=[], rects=[], first=null, over=false;
+function newGame(){ N=parseInt(document.getElementById('size-sel').value,10); over=false; first=null;
+  document.getElementById('win-overlay').classList.remove('show'); gen(); owner=Array.from({length:N},()=>Array(N).fill(-1)); rects=[]; render(); }
+function gen(){ // partition into rectangles greedily
+  const asg=Array.from({length:N},()=>Array(N).fill(false)); clue=Array.from({length:N},()=>Array(N).fill(0));
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ if(asg[r][c])continue;
+    // grow a rectangle of unassigned cells
+    let maxW=0; while(c+maxW<N && !asg[r][c+maxW])maxW++;
+    let w=1+(0|Math.random()*Math.min(maxW,3));
+    let maxH=0; outer: for(let hh=1;r+hh-1<N;hh++){ for(let cc=c;cc<c+w;cc++){ if(asg[r+hh-1][cc]){break outer;} } maxH=hh; }
+    let h=1+(0|Math.random()*Math.min(maxH,3));
+    for(let rr=r;rr<r+h;rr++)for(let cc=c;cc<c+w;cc++)asg[rr][cc]=true;
+    const area=w*h; const cells=[]; for(let rr=r;rr<r+h;rr++)for(let cc=c;cc<c+w;cc++)cells.push([rr,cc]); const [pr,pc]=cells[0|Math.random()*cells.length]; clue[pr][pc]=area;
+  }
+}
+function cellClick(r,c){ if(over)return;
+  if(first && first[0]===r && first[1]===c){ // same cell twice: clear its rect
+    if(owner[r][c]>=0) clearRect(owner[r][c]); first=null; render(); return; }
+  if(!first){ first=[r,c]; render(); return; }
+  tryRect(first[0],first[1],r,c); first=null; render(); if(checkWin())win();
+}
+function tryRect(r1,c1,r2,c2){ const rl=Math.min(r1,r2),rh=Math.max(r1,r2),cl=Math.min(c1,c2),ch=Math.max(c1,c2);
+  const area=(rh-rl+1)*(ch-cl+1); let clues=0, cx=-1,cy=-1, overlap=false;
+  for(let r=rl;r<=rh;r++)for(let c=cl;c<=ch;c++){ if(clue[r][c]){clues++;cx=r;cy=c;} if(owner[r][c]>=0)overlap=true; }
+  if(clues!==1 || overlap || clue[cx][cy]!==area){ sfx('error'); return; }
+  const id=rects.length; rects.push({rl,rh,cl,ch}); for(let r=rl;r<=rh;r++)for(let c=cl;c<=ch;c++)owner[r][c]=id; sfx('place');
+}
+function clearRect(id){ for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(owner[r][c]===id)owner[r][c]=-1; }
+function checkWin(){ for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(owner[r][c]<0)return false; return true; }
+function render(){ const g=document.getElementById('grid'); if(!g)return; const cell=Math.floor(Math.min(window.innerWidth-40,420)/N); g.style.gridTemplateColumns=`repeat(${N},${cell}px)`; g.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const d=document.createElement('div'); const id=owner[r][c]; d.className='sk-cell'+(clue[r][c]?' clue':'')+(first&&first[0]===r&&first[1]===c?' first':''); d.style.width=cell+'px'; d.style.height=cell+'px'; d.style.fontSize=(cell*0.4)+'px';
+    if(id>=0){ const col=COLORS[id%COLORS.length]; d.style.background=col+'44';
+      const rc=rects[id]; d.style.borderTop=(r===rc.rl?'3px solid '+col:''); d.style.borderBottom=(r===rc.rh?'3px solid '+col:''); d.style.borderLeft=(c===rc.cl?'3px solid '+col:''); d.style.borderRight=(c===rc.ch?'3px solid '+col:''); }
+    d.textContent=clue[r][c]||''; d.onclick=()=>cellClick(r,c); g.appendChild(d); }
+}
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='Every rectangle placed! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+window.addEventListener('resize',()=>{ if(clue.length) render(); });
+newGame();
+</script>
+</body>
+</html>

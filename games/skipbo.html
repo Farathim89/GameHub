@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skip-Bo</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
+<style>
+/* ── LAYOUT ── */
+.sb-wrap{
+  display:flex;flex-direction:column;align-items:center;
+  padding:10px 12px 20px;gap:10px;max-width:700px;margin:0 auto;width:100%;
+}
+.sb-section{
+  background:var(--surface);border:2px solid var(--border);
+  border-radius:10px;padding:10px 14px;width:100%;box-sizing:border-box;
+}
+.sb-lbl{
+  font-family:'Orbitron',monospace;font-size:10px;
+  letter-spacing:2px;color:var(--dim);margin-bottom:8px;
+}
+.sb-row{display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;}
+
+/* ── CARDS ── */
+.sbc{
+  width:56px;height:78px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Nunito',sans-serif;font-weight:900;font-size:22px;
+  border:2px solid rgba(255,255,255,.2);cursor:pointer;
+  box-shadow:1px 2px 6px rgba(0,0,0,.5);user-select:none;
+  transition:transform .15s,box-shadow .15s;position:relative;flex-shrink:0;
+}
+.sbc::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.2) 0%,transparent 55%);pointer-events:none;border-radius:7px;}
+.sbc.gh-deal{animation:ghCardDeal .34s cubic-bezier(.2,1,.35,1) both;}
+@media (prefers-reduced-motion: reduce){.sbc.gh-deal{animation:none!important;}}
+.sbc:hover{transform:translateY(-4px);box-shadow:1px 6px 12px rgba(0,0,0,.6);}
+.sbc.sel{transform:translateY(-10px)!important;box-shadow:0 0 0 3px #f0c040,1px 2px 14px rgba(0,0,0,.7)!important;}
+.sbc.back{background:repeating-linear-gradient(135deg,#1a3a6a 0,#1a3a6a 6px,#0a1635 6px,#0a1635 12px);border-color:#2a5aaa;cursor:default;font-size:14px;color:rgba(255,255,255,.5);}
+.sbc.back::after{display:none;}
+/* Card colors by value */
+.sbc.cv0{background:linear-gradient(135deg,#8020a0,#c040d0);color:#fff;}/* SB wild */
+.sbc.cv1{background:linear-gradient(145deg,#b01010,#e03030);color:#fff;}
+.sbc.cv2{background:linear-gradient(145deg,#b04000,#e07020);color:#fff;}
+.sbc.cv3{background:linear-gradient(145deg,#908000,#d0b000);color:#111;}
+.sbc.cv4{background:linear-gradient(145deg,#107030,#20b050);color:#fff;}
+.sbc.cv5{background:linear-gradient(145deg,#007060,#00a080);color:#fff;}
+.sbc.cv6{background:linear-gradient(145deg,#1040a0,#2070e0);color:#fff;}
+.sbc.cv7{background:linear-gradient(145deg,#500090,#8020c0);color:#fff;}
+.sbc.cv8{background:linear-gradient(145deg,#900050,#d01080);color:#fff;}
+.sbc.cv9{background:linear-gradient(145deg,#804000,#c06020);color:#fff;}
+.sbc.cv10{background:linear-gradient(145deg,#304040,#507060);color:#fff;}
+.sbc.cv11{background:linear-gradient(145deg,#203050,#405070);color:#fff;}
+.sbc.cv12{background:linear-gradient(145deg,#102030,#304050);color:#fff;}
+
+/* ── SLOTS ── */
+.build-slot{
+  width:56px;height:78px;border:2px solid #333;border-radius:9px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;background:var(--surface2);flex-shrink:0;
+  font-family:'Orbitron',monospace;transition:border-color .2s,box-shadow .2s;
+}
+.build-slot:hover{border-color:#f0c040;box-shadow:0 0 10px rgba(240,192,64,.2);}
+.build-top{font-size:24px;font-weight:900;color:#f0c040;font-family:'Nunito',sans-serif;}
+.build-need{font-size:9px;color:var(--dim);letter-spacing:1px;margin-top:2px;}
+.discard-slot{
+  width:56px;height:78px;border:2px dashed #2a2a2a;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;background:var(--surface2);flex-shrink:0;
+  font-family:'Orbitron',monospace;font-size:10px;color:#333;
+  transition:border-color .2s;
+}
+.discard-slot:hover{border-color:#888;color:#666;}
+.stock-card{
+  width:56px;height:78px;border:2px solid #444;border-radius:9px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--surface2);flex-shrink:0;cursor:pointer;
+  transition:border-color .2s,box-shadow .2s;
+}
+.stock-card:hover{border-color:#aaa;}
+.stock-card.sel{box-shadow:0 0 0 3px #f0c040;}
+.stock-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:11px;color:var(--dim);}
+
+/* ── MSG & BUTTONS ── */
+.sb-msg{font-family:'Orbitron',monospace;font-size:12px;min-height:18px;letter-spacing:1px;text-align:center;}
+.end-btn{
+  font-family:'Orbitron',monospace;font-size:13px;font-weight:700;
+  padding:9px 20px;border-radius:8px;border:2px solid #f0c040;
+  cursor:pointer;background:var(--surface2);color:#f0c040;letter-spacing:1px;
+  transition:all .2s;
+}
+.end-btn:hover{background:rgba(240,192,64,.15);}
+.end-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+/* ── TURN HEADER ── */
+.turn-pill{
+  font-family:'Orbitron',monospace;font-size:14px;font-weight:700;
+  padding:8px 20px;border-radius:8px;border:2px solid;letter-spacing:2px;
+}
+.opp-header{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  font-family:'Orbitron',monospace;font-size:11px;color:#555;letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#ff8c42">🃏 SKIP-BO</span>
+  <div class="h-btns">
+    <select id="mode-sel">
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai" selected>VS AI</option>
+    </select>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+
+<!-- MODE PICK -->
+<div id="mode-pick" class="mode-wrap">
+  <div class="mode-title" style="color:#ff8c42">🃏 SKIP-BO</div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;max-width:380px;line-height:1.8;">
+    Clear your stockpile to win!<br>
+    Build shared piles from 1 → 12.<br>
+    <b style="color:#f0c040;">SB</b> = wild card (any number).<br>
+    Play from hand, stockpile, or your discard piles.<br>
+    <b style="color:#aaa;">Discard one hand card to end your turn.</b>
+  </div>
+  <div class="mode-btns">
+    <button class="mbtn blue" onclick="pickMode('2p')">👥 2 PLAYERS</button>
+    <button class="mbtn green" onclick="pickMode('ai')">🤖 VS AI</button>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game" style="display:none;">
+<div class="sb-wrap" id="sb-wrap"></div>
+</div>
+
+<!-- WIN -->
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════
+let mode='ai';
+let deck=[];
+let completed=[];       // cards from finished (1→12) build piles, reshuffled back into the deck when it runs out
+let stock=[[],[]];      // stockpile per player
+let hands=[[],[]];      // hand per player (max 5)
+let discard=[];         // 8 piles: [0..3]=P1, [4..7]=P2
+let build=[];           // 4 shared build piles
+let turn=0;             // 0=P1, 1=P2/AI
+// Selection: null | {src:'hand'|'stock'|'discard', idx:number}
+let sel=null;
+// Has the current player played at least one card to a build pile this turn?
+let playedToBuild=false;
+// Has the current player discarded this turn? (required to end turn)
+let discardedThisTurn=false;
+let msg='';
+
+// ══════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════
+function pickMode(m){
+  document.getElementById('mode-sel').value=m;
+  newGame();
+}
+
+function newGame(){
+  mode=document.getElementById('mode-sel').value;
+  document.getElementById('mode-pick').style.display='none';
+  document.getElementById('game').style.display='block';
+  document.getElementById('win-overlay').classList.remove('show');
+
+  // Build deck: 12 copies of 1-12 + 18 wilds
+  deck=[];
+  completed=[];
+  for(let i=0;i<12;i++) for(let n=1;n<=12;n++) deck.push(n);
+  for(let i=0;i<18;i++) deck.push(0);
+  shuffle(deck);
+
+  stock=[[],[]];
+  for(let p=0;p<2;p++) for(let i=0;i<20;i++) stock[p].push(deck.pop());
+
+  hands=[[],[]];
+  discard=Array(8).fill(null).map(()=>[]);
+  build=Array(4).fill(null).map(()=>[]);
+
+  turn=0; sel=null; playedToBuild=false; discardedThisTurn=false; msg='';
+
+  drawCards(0);
+  drawCards(1);
+  render();
+  document.querySelectorAll('.sbc').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(Math.min(i,30)*26)+'ms';});
+}
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+
+function drawCards(p){
+  while(hands[p].length<5){
+    if(!deck.length) refillDeck();
+    if(!deck.length) break;
+    hands[p].push(deck.pop());
+  }
+}
+
+// A build pile reached 12: set its cards aside so they can rejoin the draw pile later.
+function completeBuild(b){
+  for(const c of build[b]) completed.push(c);
+  build[b]=[];
+}
+
+// Draw pile empty? Reshuffle the set-aside completed cards into a fresh draw pile.
+function refillDeck(){
+  if(!completed.length) return;
+  deck=completed;
+  completed=[];
+  shuffle(deck);
+}
+
+// ══════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════
+function topBuild(b){return build[b].length?build[b][build[b].length-1]:0;}
+function canPlay(card,b){
+  const need=topBuild(b)+1;
+  if(need>12)return false;
+  return card===0||card===need;
+}
+function cardLabel(n){return n===0?'SB':String(n);}
+function cardCls(n){return n===0?'cv0':'cv'+n;}
+
+// ══════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════
+function render(){
+  const wrap=document.getElementById('sb-wrap');
+  if(!wrap)return;
+  const p=turn, opp=1-p;
+  const pName=p===0?'🟡 PLAYER 1':(mode==='ai'?'🤖 AI':'🟣 PLAYER 2');
+  const oppName=opp===0?'🟡 PLAYER 1':(mode==='ai'?'🤖 AI':'🟣 PLAYER 2');
+
+  let h='';
+
+  // ── TURN PILL ──
+  h+=`<div class="turn-pill" style="color:${p===0?'#f0c040':'#c080e0'};border-color:${p===0?'#f0c040':'#c080e0'};">
+    ${pName}'S TURN
+  </div>`;
+
+  // ── OPPONENT AREA ──
+  h+=`<div class="sb-section">
+    <div class="opp-header">
+      <span>${oppName}</span>
+      <span>📦 STOCKPILE: ${stock[opp].length}</span>
+      <span>✋ HAND: ${hands[opp].length}</span>
+    </div>
+    <div class="sb-lbl" style="margin-top:8px;">DISCARD PILES</div>
+    <div class="sb-row">`;
+  for(let i=0;i<4;i++){
+    const di=opp*4+i, pile=discard[di];
+    if(pile.length){
+      const top=pile[pile.length-1];
+      h+=`<div class="sbc ${cardCls(top)}" style="cursor:default;">${cardLabel(top)}</div>`;
+    } else {
+      h+=`<div class="discard-slot" style="cursor:default;">D${i+1}</div>`;
+    }
+  }
+  h+=`</div></div>`;
+
+  // ── BUILD PILES ──
+  h+=`<div class="sb-section">
+    <div class="sb-lbl" style="color:var(--accent);">BUILD PILES — click to play selected card</div>
+    <div class="sb-row">`;
+  for(let i=0;i<4;i++){
+    const top=topBuild(i), need=top+1;
+    h+=`<div class="build-slot" onclick="playToBuild(${i})">
+      ${top?`<div class="build-top">${top}</div>`:''}
+      <div class="build-need">${need<=12?'need '+need:'FULL ✓'}</div>
+    </div>`;
+  }
+  h+=`</div></div>`;
+
+  // ── PLAYER AREA ──
+  const canEndTurn=discardedThisTurn||(hands[p].length===0);
+  const needDiscard=!discardedThisTurn&&hands[p].length>0;
+
+  h+=`<div class="sb-section">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+      <div class="sb-lbl" style="margin-bottom:0;color:${p===0?'#f0c040':'#c080e0'};">${pName}</div>
+      <div class="sb-msg" style="color:${msg.startsWith('❌')?'#ff5555':msg.startsWith('✅')?'#44cc88':'#f0c040'};">${msg}</div>
+      ${canEndTurn?`<button class="end-btn" onclick="endTurn()">END TURN →</button>`:''}
+      ${needDiscard&&playedToBuild?`<div style="font-family:'Orbitron',monospace;font-size:10px;color:#888;">DISCARD 1 CARD TO END TURN</div>`:''}
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
+      <!-- Stockpile -->
+      <div>
+        <div class="sb-lbl">STOCKPILE (${stock[p].length})</div>
+        ${stock[p].length?
+          `<div class="stock-card ${sel&&sel.src==='stock'?'sel':''}" onclick="selectStock()">
+            <div class="sbc ${cardCls(stock[p][stock[p].length-1])}" style="width:48px;height:68px;font-size:18px;cursor:pointer;box-shadow:none;transform:none;">${cardLabel(stock[p][stock[p].length-1])}</div>
+            <div class="stock-num">${stock[p].length} left</div>
+          </div>`:
+          `<div class="discard-slot" style="cursor:default;">EMPTY</div>`
+        }
+      </div>
+
+      <!-- Hand -->
+      <div>
+        <div class="sb-lbl">HAND (${hands[p].length}/5)</div>
+        <div class="sb-row">`;
+  hands[p].forEach((n,i)=>{
+    const isSel=sel&&sel.src==='hand'&&sel.idx===i;
+    h+=`<div class="sbc ${cardCls(n)} ${isSel?'sel':''}" onclick="selectHand(${i})">${cardLabel(n)}</div>`;
+  });
+  if(!hands[p].length) h+=`<span style="font-family:'Orbitron',monospace;font-size:11px;color:var(--green);">EMPTY</span>`;
+  h+=`</div></div>
+
+      <!-- Discard piles -->
+      <div>
+        <div class="sb-lbl">YOUR DISCARD PILES</div>
+        <div class="sb-row">`;
+  for(let i=0;i<4;i++){
+    const di=p*4+i, pile=discard[di];
+    if(pile.length){
+      const top=pile[pile.length-1];
+      const isSel=sel&&sel.src==='discard'&&sel.idx===i;
+      // Clicking a filled discard pile: if hand card selected → discard there; else select top for play
+      h+=`<div class="sbc ${cardCls(top)} ${isSel?'sel':''}" onclick="clickDiscard(${i})">${cardLabel(top)}</div>`;
+    } else {
+      // Empty discard slot — click to discard selected hand card
+      h+=`<div class="discard-slot" onclick="discardTo(${i})">D${i+1}</div>`;
+    }
+  }
+  h+=`</div></div>
+    </div>
+  </div>`;
+
+  wrap.innerHTML=h;
+}
+
+// ══════════════════════════════════════════════════
+// SELECTION
+// ══════════════════════════════════════════════════
+function selectHand(i){
+  if(isAI())return;
+  sel=(sel&&sel.src==='hand'&&sel.idx===i)?null:{src:'hand',idx:i};
+  msg='';render();
+}
+
+function selectStock(){
+  if(isAI())return;
+  sel=(sel&&sel.src==='stock')?null:{src:'stock'};
+  msg='';render();
+}
+
+function clickDiscard(i){
+  if(isAI())return;
+  // If a hand card is selected → discard it here (end turn)
+  if(sel&&sel.src==='hand'){
+    discardTo(i);return;
+  }
+  // If stockpile selected → can't discard from stockpile, tell user
+  if(sel&&sel.src==='stock'){
+    msg='❌ Cannot discard from stockpile — discard a hand card instead';render();return;
+  }
+  // Otherwise toggle select top of this discard pile (to play to build)
+  const di=turn*4+i;
+  if(!discard[di].length)return;
+  sel=(sel&&sel.src==='discard'&&sel.idx===i)?null:{src:'discard',idx:i};
+  msg='';render();
+}
+
+function getSelCard(){
+  if(!sel)return null;
+  if(sel.src==='hand')return hands[turn][sel.idx];
+  if(sel.src==='stock')return stock[turn].length?stock[turn][stock[turn].length-1]:null;
+  if(sel.src==='discard'){const di=turn*4+sel.idx;return discard[di].length?discard[di][discard[di].length-1]:null;}
+  return null;
+}
+
+function removeSelected(){
+  if(!sel)return;
+  if(sel.src==='hand') hands[turn].splice(sel.idx,1);
+  else if(sel.src==='stock') stock[turn].pop();
+  else if(sel.src==='discard') discard[turn*4+sel.idx].pop();
+  sel=null;
+}
+
+function isAI(){return mode==='ai'&&turn===1;}
+
+// ══════════════════════════════════════════════════
+// PLAY TO BUILD
+// ══════════════════════════════════════════════════
+function playToBuild(b){
+  if(isAI())return;
+  if(!sel){msg='❌ Select a card first';render();return;}
+  const card=getSelCard();
+  if(card===null)return;
+  if(!canPlay(card,b)){msg=`❌ Needs ${topBuild(b)+1}, you have ${cardLabel(card)}`;render();return;}
+  const played=card===0?(topBuild(b)+1):card;
+  const selEl=document.querySelector('.sbc.sel'); const srcRect=selEl?selEl.getBoundingClientRect():null; const srcBg=selEl?getComputedStyle(selEl).background:null;
+  removeSelected();
+  build[b].push(played);
+  playedToBuild=true;
+  if(build[b].length===12) completeBuild(b);
+  msg=`✅ Played ${cardLabel(played)}`;
+  // Check win
+  if(!stock[turn].length){endGameWin();return;}
+  // Official rule: playing all 5 hand cards → immediately draw 5 new ones
+  if(!hands[turn].length&&deck.length){drawCards(turn);msg='✅ Hand empty — drew 5 new cards!';}
+  render();
+  if(srcRect&&window.GH){ const dest=document.querySelectorAll('.build-slot')[b]; if(dest)GH.slide(srcRect,dest,{bg:srcBg}); }
+}
+
+// ══════════════════════════════════════════════════
+// DISCARD (ends turn)
+// ══════════════════════════════════════════════════
+function discardTo(slotIdx){
+  if(isAI())return;
+  if(!sel||sel.src!=='hand'){msg='❌ Select a hand card first to discard';render();return;}
+  const card=hands[turn][sel.idx];
+  hands[turn].splice(sel.idx,1);
+  discard[turn*4+slotIdx].push(card);
+  sel=null;msg='';
+  discardedThisTurn=true;
+  render();
+  // Auto-advance turn after short delay so player sees the discard
+  setTimeout(()=>endTurn(),400);
+}
+
+// ══════════════════════════════════════════════════
+// TURN MANAGEMENT
+// ══════════════════════════════════════════════════
+function endTurn(){
+  if(isAI())return;
+  if(!discardedThisTurn&&hands[turn].length>0){
+    msg='❌ You must discard one card to end your turn';render();return;
+  }
+  doNextTurn();
+}
+
+function doNextTurn(){
+  turn=1-turn;
+  sel=null;msg='';playedToBuild=false;discardedThisTurn=false;
+  drawCards(turn);
+  render();
+  if(mode==='ai'&&turn===1) setTimeout(aiTurn,600);
+}
+
+function endGameWin(){
+  const winner=turn===0?'🏆 PLAYER 1 WINS!':(mode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!');
+  render();
+  setTimeout(()=>{
+    document.getElementById('win-msg').textContent=winner;
+    document.getElementById('win-sub').textContent='Stockpile cleared!';
+    document.getElementById('win-overlay').classList.add('show');
+  },300);
+}
+
+// ══════════════════════════════════════════════════
+// AI
+// ══════════════════════════════════════════════════
+function aiTurn(){
+  let moved=true;
+  while(moved){
+    moved=false;
+    // 1. Play from stockpile
+    if(stock[1].length){
+      const top=stock[1][stock[1].length-1];
+      for(let b=0;b<4;b++){
+        if(canPlay(top,b)){
+          const played=top===0?(topBuild(b)+1):top;
+          stock[1].pop();build[b].push(played);
+          if(build[b].length===12)completeBuild(b);
+          playedToBuild=true;moved=true;
+          if(!stock[1].length){endGameWin();return;}
+          break;
+        }
+      }
+    }
+    if(moved)continue;
+    // 2. Play from hand
+    for(let hi=0;hi<hands[1].length;hi++){
+      const c=hands[1][hi];
+      for(let b=0;b<4;b++){
+        if(canPlay(c,b)){
+          const played=c===0?(topBuild(b)+1):c;
+          hands[1].splice(hi,1);build[b].push(played);
+          if(build[b].length===12)completeBuild(b);
+          if(!hands[1].length&&deck.length)drawCards(1); // refill on empty hand
+          playedToBuild=true;moved=true;break;
+        }
+      }
+      if(moved)break;
+    }
+    if(moved)continue;
+    // 3. Play from AI own discard piles
+    for(let di=0;di<4;di++){
+      const pile=discard[4+di];
+      if(!pile.length)continue;
+      const c=pile[pile.length-1];
+      for(let b=0;b<4;b++){
+        if(canPlay(c,b)){
+          const played=c===0?(topBuild(b)+1):c;
+          pile.pop();build[b].push(played);
+          if(build[b].length===12)completeBuild(b);
+          playedToBuild=true;moved=true;break;
+        }
+      }
+      if(moved)break;
+    }
+  }
+  // Discard to end turn
+  if(hands[1].length){
+    // Pick best card to discard: avoid wilds, prefer highest non-useful number
+    let bestIdx=0,bestScore=-Infinity;
+    for(let i=0;i<hands[1].length;i++){
+      const c=hands[1][i];
+      if(c===0)continue;// never discard wild if possible
+      let score=c;// higher = less immediately needed
+      if(score>bestScore){bestScore=score;bestIdx=i;}
+    }
+    // If all are wilds, discard first
+    if(bestScore===-Infinity)bestIdx=0;
+    // Pick emptiest discard pile
+    let bestSlot=0;
+    for(let di=0;di<4;di++) if(discard[4+di].length<discard[4+bestSlot].length)bestSlot=di;
+    discard[4+bestSlot].push(hands[1][bestIdx]);
+    hands[1].splice(bestIdx,1);
+  }
+  discardedThisTurn=true;
+  doNextTurn();
+}
+
+// ── START ──
+document.getElementById('mode-pick').style.display='flex';
+document.getElementById('game').style.display='none';
+</script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sokoban</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.sk-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+.sk-grid{display:grid;gap:0;background:#0a0a0a;padding:6px;border-radius:10px;border:2px solid var(--border);}
+.sk-cell{display:flex;align-items:center;justify-content:center;box-sizing:border-box;}
+.sk-wall{background:#3a3a44;border:1px solid #2a2a30;border-radius:3px;}
+.sk-floor{background:#161620;}
+.sk-target{background:#161620;}
+.sk-target::after{content:'';width:34%;height:34%;border-radius:50%;background:rgba(240,192,64,.5);}
+.sk-box{background:linear-gradient(145deg,#b07030,#8a561f);border:2px solid #d0a060;border-radius:4px;box-sizing:border-box;}
+.sk-box.on{background:linear-gradient(145deg,#40c060,#2a9048);border-color:#80e0a0;}
+.sk-player{font-size:70%;}
+.sk-dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:6px;}
+.sk-dpad button{font-size:20px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.sk-dpad button:active{background:rgba(240,192,64,.18);}
+.sk-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">📦 SOKOBAN</span>
+  <div class="h-btns">
+    <select id="lvl-sel" onchange="loadLevel(+this.value)"></select>
+    <div class="info-pill">MOVES: <span id="moves">0</span></div>
+    <button class="hbtn" onclick="undo()">↩ UNDO</button>
+    <button class="hbtn" onclick="loadLevel(lvl)">⟳ RESET</button>
+  </div>
+</div>
+<div class="sk-wrap">
+  <div class="sk-hint">Push every box 📦 onto a target ◦. You can only push (not pull). Arrow keys / WASD / pad.</div>
+  <div id="grid" class="sk-grid"></div>
+  <div class="sk-dpad">
+    <span></span><button onpointerdown="pd(event,0,-1)">▲</button><span></span>
+    <button onpointerdown="pd(event,-1,0)">◀</button><span></span><button onpointerdown="pd(event,1,0)">▶</button>
+    <span></span><button onpointerdown="pd(event,0,1)">▼</button><span></span>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" id="next-btn" onclick="nextLevel()">NEXT LEVEL →</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='sokoban';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+// # wall, space floor, . target, $ box, * box-on-target, @ player, + player-on-target
+// All levels verified solvable (BFS) with matching box/target counts.
+const LEVELS=[
+"#######\n#     #\n#@$  .#\n#     #\n#######",
+"#####\n#.  #\n#   #\n#$  #\n#@  #\n#####",
+"######\n#    #\n# ## #\n# $. #\n# .$ #\n# @  #\n######",
+"########\n# .  . #\n#  $$  #\n#  @   #\n########",
+"########\n#      #\n# .$.$ #\n# @    #\n# $.$. #\n#      #\n########",
+"#######\n#. #  #\n#  $  #\n#. $#.#\n#  $ @#\n#. $  #\n#   ###\n#####"
+];
+let grid=[], rows=0, cols=0, px=0, py=0, moves=0, lvl=0, history=[], targets=[], won=false;
+
+function parse(str){
+  const lines=str.split('\n');
+  rows=lines.length; cols=Math.max(...lines.map(l=>l.length));
+  grid=[]; targets=[];
+  for(let r=0;r<rows;r++){
+    const row=[];
+    for(let c=0;c<cols;c++){
+      const ch=lines[r][c]||' ';
+      if(ch==='#'){ row.push('#'); }
+      else { // floor/target with possible box/player
+        if(ch==='.'||ch==='*'||ch==='+') targets.push(r+','+c);
+        if(ch==='$'||ch==='*') row.push('$');
+        else row.push(' ');
+        if(ch==='@'||ch==='+'){ px=c; py=r; }
+      }
+    }
+    grid.push(row);
+  }
+}
+function loadLevel(i){
+  lvl=i; parse(LEVELS[i]); moves=0; history=[]; won=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('lvl-sel').value=i;
+  render();
+}
+function isWall(r,c){ return r<0||r>=rows||c<0||c>=cols||grid[r][c]==='#'; }
+function isBox(r,c){ return !isWall(r,c)&&grid[r][c]==='$'; }
+function move(dx,dy){
+  if(won) return;
+  const nr=py+dy, nc=px+dx;
+  if(isWall(nr,nc)) { sfx('error'); return; }
+  if(isBox(nr,nc)){
+    const br=nr+dy, bc=nc+dx;
+    if(isWall(br,bc)||isBox(br,bc)){ sfx('error'); return; }
+    history.push(snapshot());
+    grid[nr][nc]=' '; grid[br][bc]='$';
+    px=nc; py=nr; moves++; sfx('place'); render();
+    if(solved()) win();
+    return;
+  }
+  history.push(snapshot());
+  px=nc; py=nr; moves++; sfx('move'); render();
+}
+function snapshot(){ return {g:grid.map(r=>r.slice()), px, py, moves}; }
+function undo(){ if(won||!history.length)return; const s=history.pop(); grid=s.g; px=s.px; py=s.py; moves=s.moves; render(); }
+function solved(){ return targets.every(t=>{const [r,c]=t.split(',').map(Number); return grid[r][c]==='$';}); }
+function render(){
+  const g=document.getElementById('grid'); if(!g)return;
+  const cell=Math.floor(Math.min(window.innerWidth-40,460)/cols);
+  g.style.gridTemplateColumns=`repeat(${cols},${cell}px)`;
+  g.innerHTML='';
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const d=document.createElement('div');
+    const isTarget=targets.includes(r+','+c);
+    d.style.width=cell+'px'; d.style.height=cell+'px'; d.style.fontSize=(cell*0.7)+'px';
+    if(grid[r][c]==='#'){ d.className='sk-cell sk-wall'; }
+    else if(grid[r][c]==='$'){ d.className='sk-cell sk-box'+(isTarget?' on':''); }
+    else if(px===c&&py===r){ d.className='sk-cell '+(isTarget?'sk-target':'sk-floor')+' sk-player'; d.textContent='🙂'; }
+    else if(isTarget){ d.className='sk-cell sk-target'; }
+    else { d.className='sk-cell sk-floor'; }
+    g.appendChild(d);
+  }
+  document.getElementById('moves').textContent=moves;
+}
+function win(){
+  won=true;
+  const r=window.GH?GH.score.best(GAME,'best_'+lvl,moves,'low'):{value:moves,isBest:false};
+  document.getElementById('next-btn').style.display = lvl<LEVELS.length-1?'':'none';
+  document.getElementById('win-sub').textContent='Level '+(lvl+1)+' in '+moves+' moves'+(r.isBest?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function nextLevel(){ if(lvl<LEVELS.length-1) loadLevel(lvl+1); else loadLevel(0); }
+function pd(e,dx,dy){ e.preventDefault(); move(dx,dy); }
+document.addEventListener('keydown',e=>{
+  const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+  if(m[e.key]){ e.preventDefault(); move(m[e.key][0],m[e.key][1]); }
+});
+(function init(){
+  const sel=document.getElementById('lvl-sel');
+  LEVELS.forEach((_,i)=>{const o=document.createElement('option');o.value=i;o.textContent='Level '+(i+1);sel.appendChild(o);});
+  loadLevel(0);
+  window.addEventListener('resize',()=>{ if(grid.length) render(); });
+})();
+</script>
+</body>
+</html>

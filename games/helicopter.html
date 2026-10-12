@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Helicopter</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.hc-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 10px;}
+#heli{background:linear-gradient(180deg,#101828,#0a0f1a);border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.hc-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🚁 HELICOPTER</span>
+  <div class="h-btns"><div class="info-pill">SCORE: <span id="score">0</span></div><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="hc-wrap">
+  <div class="hc-hint">Hold mouse / tap / Space to rise, release to fall. Fly through the cave!</div>
+  <canvas id="heli" width="640" height="340"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 CRASHED</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='helicopter';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('heli'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height;
+let heli, walls, blocks, score, best, speed, over, raf, thrust, started, scrollX, gapY, gapH;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+function newGame(){ heli={x:120,y:H/2,vy:0,w:36,h:16}; walls=[]; blocks=[]; score=0; speed=3.2; over=false; thrust=false; started=false; scrollX=0; gapY=H/2; gapH=150;
+  for(let x=0;x<=W+40;x+=20) walls.push({x, top:gapY-gapH/2, bot:gapY+gapH/2});
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; cancelAnimationFrame(raf); draw(); raf=requestAnimationFrame(loop); }
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  if(!started) return;
+  heli.vy += thrust? -0.5 : 0.45; heli.vy=Math.max(-6,Math.min(6,heli.vy)); heli.y+=heli.vy;
+  scrollX+=speed; score=Math.floor(scrollX/20); speed=3.2+score*0.004;
+  // scroll cave: shift walls, add new on right
+  walls.forEach(w=>w.x-=speed);
+  while(walls.length && walls[0].x<-20) walls.shift();
+  while(walls.length===0 || walls[walls.length-1].x < W+20){
+    const last=walls.length?walls[walls.length-1]:{x:0,top:gapY-gapH/2,bot:gapY+gapH/2};
+    gapY += (Math.random()-0.5)*40; gapY=Math.max(gapH/2+20, Math.min(H-gapH/2-20, gapY));
+    gapH = Math.max(90, 150 - score*0.15);
+    walls.push({x:last.x+20, top:gapY-gapH/2, bot:gapY+gapH/2});
+  }
+  // random floating blocks
+  if(Math.random()<0.02 && score>20){ blocks.push({x:W, y:gapY-gapH/2+20+Math.random()*(gapH-40), w:12, h:30+Math.random()*30}); }
+  blocks.forEach(b=>b.x-=speed); blocks=blocks.filter(b=>b.x>-15);
+  // collision
+  const hx=heli.x, hy=heli.y;
+  for(const w of walls){ if(w.x<hx+heli.w/2 && w.x+20>hx-heli.w/2){ if(hy-heli.h/2 < w.top || hy+heli.h/2 > w.bot) return gameOver(); } }
+  for(const b of blocks){ if(hx+heli.w/2>b.x && hx-heli.w/2<b.x+b.w && hy+heli.h/2>b.y && hy-heli.h/2<b.y+b.h) return gameOver(); }
+  if(hy<0||hy>H) return gameOver();
+  document.getElementById('score').textContent=score;
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#2a3a28'; for(const w of walls){ ctx.fillRect(w.x,0,21,w.top); ctx.fillRect(w.x,w.bot,21,H-w.bot); }
+  ctx.fillStyle='#8a3030'; blocks.forEach(b=>ctx.fillRect(b.x,b.y,b.w,b.h));
+  ctx.save(); ctx.translate(heli.x,heli.y); ctx.fillStyle='#f0c040'; ctx.fillRect(-heli.w/2,-heli.h/2,heli.w,heli.h);
+  ctx.fillStyle='#333'; ctx.fillRect(-heli.w/2-4,-heli.h/2-4,heli.w+8,3); ctx.fillRect(heli.w/2,-2,6,4); ctx.restore();
+  if(!started){ ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='16px Orbitron,monospace'; ctx.textAlign='center'; ctx.fillText('HOLD TO START',W/2,H/2-40); }
+}
+function gameOver(){ over=true; const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Distance '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250); }
+function press(v){ if(over)return; started=true; thrust=v; }
+cv.addEventListener('mousedown',e=>{e.preventDefault();press(true);}); cv.addEventListener('mouseup',()=>press(false)); cv.addEventListener('mouseleave',()=>thrust=false);
+cv.addEventListener('touchstart',e=>{e.preventDefault();press(true);},{passive:false}); cv.addEventListener('touchend',e=>{e.preventDefault();press(false);},{passive:false});
+document.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='ArrowUp'){press(true);e.preventDefault();} });
+document.addEventListener('keyup',e=>{ if(e.key===' '||e.key==='ArrowUp')thrust=false; });
+newGame();
+</script>
+</body>
+</html>

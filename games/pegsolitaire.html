@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peg Solitaire</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ps-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 12px;}
+.ps-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;background:var(--surface);padding:14px;border-radius:14px;border:2px solid var(--border);}
+.ps-hole{width:46px;height:46px;border-radius:50%;background:#0d0d12;box-shadow:inset 0 3px 6px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;}
+.ps-blank{visibility:hidden;}
+.ps-peg{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f0c860,#c08020);border:2px solid #ffe090;cursor:pointer;transition:transform .1s;}
+.ps-peg:hover{transform:scale(1.1);}
+.ps-hole.sel .ps-peg{box-shadow:0 0 0 3px var(--accent),0 0 14px rgba(240,192,64,.6);transform:scale(1.12);}
+.ps-hole.target{cursor:pointer;box-shadow:inset 0 0 0 2px var(--green),inset 0 3px 6px rgba(0,0,0,.7);}
+.ps-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;max-width:420px;line-height:1.6;}
+@media(max-width:480px){.ps-hole{width:38px;height:38px;}.ps-peg{width:28px;height:28px;}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🟠 PEG SOLITAIRE</span>
+  <div class="h-btns">
+    <div class="info-pill">PEGS: <span id="pegs">32</span></div>
+    <div class="info-pill">BEST: <span id="best">—</span></div>
+    <button class="hbtn" onclick="undo()">↩ UNDO</button>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ps-wrap">
+  <div class="ps-hint">Jump a peg over a neighbour into an empty hole; the jumped peg is removed. Finish with <b style="color:var(--accent)">one peg</b> — ideally in the centre.</div>
+  <div id="grid" class="ps-grid"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='pegsolitaire';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+// 7x7, -1 invalid, 0 empty, 1 peg
+let board=[], sel=null, history=[], over=false;
+function layout(){
+  const b=[];
+  for(let r=0;r<7;r++){ b[r]=[]; for(let c=0;c<7;c++){
+    const corner=(r<2||r>4)&&(c<2||c>4);
+    b[r][c]= corner? -1 : 1;
+  }}
+  b[3][3]=0; // center empty
+  return b;
+}
+function newGame(){
+  board=layout(); sel=null; history=[]; over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  const bst=window.GH?GH.score.get(GAME,'bestPegs'):null;
+  document.getElementById('best').textContent=bst?bst+' left':'—';
+  render();
+}
+function pegCount(){ let n=0; for(let r=0;r<7;r++)for(let c=0;c<7;c++)if(board[r][c]===1)n++; return n; }
+function canJump(r,c,tr,tc){
+  if(board[tr]===undefined||board[tr][tc]!==0) return false;
+  const mr=(r+tr)/2, mc=(c+tc)/2;
+  if(!Number.isInteger(mr)||!Number.isInteger(mc)) return false;
+  if((Math.abs(tr-r)===2&&tc===c)||(Math.abs(tc-c)===2&&tr===r)) return board[mr][mc]===1;
+  return false;
+}
+function targetsFor(r,c){
+  return [[r-2,c],[r+2,c],[r,c-2],[r,c+2]].filter(([tr,tc])=>tr>=0&&tr<7&&tc>=0&&tc<7&&canJump(r,c,tr,tc));
+}
+function anyMoves(){ for(let r=0;r<7;r++)for(let c=0;c<7;c++)if(board[r][c]===1&&targetsFor(r,c).length)return true; return false; }
+function clickHole(r,c){
+  if(over) return;
+  if(sel){
+    const [sr,sc]=sel;
+    if(canJump(sr,sc,r,c)){
+      history.push(board.map(row=>row.slice()));
+      board[sr][sc]=0; board[(sr+r)/2][(sc+c)/2]=0; board[r][c]=1;
+      sel=null; sfx('place'); render(); checkEnd(); return;
+    }
+    if(board[r][c]===1){ sel=[r,c]; sfx('select'); render(); return; }
+    sel=null; render(); return;
+  }
+  if(board[r][c]===1){ if(targetsFor(r,c).length){ sel=[r,c]; sfx('select'); } else sfx('error'); render(); }
+}
+function checkEnd(){
+  const n=pegCount();
+  if(n===1){ win(n, board[3][3]===1); return; }
+  if(!anyMoves()){ win(n,false); }
+}
+function win(n,centered){
+  over=true;
+  if(window.GH)GH.score.best(GAME,'bestPegs',n,'low');
+  if(n===1){ document.getElementById('win-msg').textContent=centered?'🏆 PERFECT!':'🏆 SOLVED!'; document.getElementById('win-sub').textContent=centered?'One peg, dead centre! ⭐':'Down to a single peg!'; }
+  else { document.getElementById('win-msg').textContent='😬 NO MOVES LEFT'; document.getElementById('win-sub').textContent=n+' pegs remaining — try again!'; }
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function undo(){ if(over||!history.length)return; board=history.pop(); sel=null; render(); }
+function render(){
+  const g=document.getElementById('grid'); if(!g)return;
+  g.innerHTML='';
+  const tset = sel? targetsFor(sel[0],sel[1]).map(t=>t.join(',')) : [];
+  for(let r=0;r<7;r++)for(let c=0;c<7;c++){
+    const d=document.createElement('div');
+    if(board[r][c]===-1){ d.className='ps-hole ps-blank'; }
+    else{
+      d.className='ps-hole'+(sel&&sel[0]===r&&sel[1]===c?' sel':'')+(tset.includes(r+','+c)?' target':'');
+      if(board[r][c]===1){ const p=document.createElement('div'); p.className='ps-peg'; d.appendChild(p); }
+      d.onclick=()=>clickHole(r,c);
+    }
+    g.appendChild(d);
+  }
+  document.getElementById('pegs').textContent=pegCount();
+}
+newGame();
+</script>
+</body>
+</html>

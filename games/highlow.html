@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Higher or Lower</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.hl-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:22px 12px;}
+.hl-stats{display:flex;gap:30px;font-family:'Orbitron',monospace;font-size:14px;}
+.hl-stats b{color:var(--accent);}
+.hl-cards{display:flex;align-items:center;gap:20px;}
+.bigcard{width:120px;height:168px;border-radius:14px;background:#f7f4ec;border:2px solid #222;display:flex;align-items:center;justify-content:center;flex-direction:column;box-shadow:0 6px 18px rgba(0,0,0,.4);}
+.bigcard.back{background:repeating-linear-gradient(45deg,#2a3a6a,#2a3a6a 8px,#1e2a52 8px,#1e2a52 16px);}
+.bc-rank{font-family:'Orbitron',monospace;font-size:46px;font-weight:900;line-height:1;}
+.bc-suit{font-size:40px;}
+.red{color:#d23} .black{color:#111}
+.hl-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;max-width:100%;}
+.hl-b{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;padding:14px 22px;border-radius:10px;border:3px solid var(--accent);color:var(--accent);background:var(--surface);cursor:pointer;letter-spacing:1px;}
+.hl-b:disabled{opacity:.4;cursor:default}
+.hl-b.cash{border-color:var(--green);color:var(--green);}
+.hl-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🔼 HIGHER OR LOWER</span>
+  <div class="h-btns"><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="hl-wrap">
+  <div class="hl-stats"><div>STREAK <b id="streak">0</b></div><div>CARDS LEFT <b id="left">51</b></div></div>
+  <div class="hl-cards">
+    <div class="bigcard" id="cur"><div class="bc-rank" id="rank">?</div><div class="bc-suit" id="suit"></div></div>
+    <div class="bigcard back" id="next"></div>
+  </div>
+  <div class="hl-msg" id="msg">Will the next card be higher or lower?</div>
+  <div class="hl-btns">
+    <button class="hl-b" id="hi" onclick="guess(1)">▲ HIGHER</button>
+    <button class="hl-b" id="lo" onclick="guess(-1)">▼ LOWER</button>
+    <button class="hl-b cash" id="cash" onclick="cashOut()">💰 CASH OUT</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 BUST!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='highlow';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+let deck=[], cur=null, streak=0, best=0, over=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+function newGame(){ deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck); over=false; streak=0;
+  cur=deck.pop(); document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; showCur(); resetNext(); upd(); setMsg('Will the next card be higher or lower?'); enable(true); }
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function showCur(){ const red=cur.s===1||cur.s===2; const c=document.getElementById('cur'); document.getElementById('rank').textContent=RANKS[cur.r]; document.getElementById('rank').className='bc-rank '+(red?'red':'black'); document.getElementById('suit').textContent=SUITS[cur.s]; document.getElementById('suit').className='bc-suit '+(red?'red':'black'); c.classList.remove('back'); }
+function resetNext(){ const n=document.getElementById('next'); n.className='bigcard back'; n.innerHTML=''; }
+function upd(){ document.getElementById('streak').textContent=streak; document.getElementById('left').textContent=deck.length; document.getElementById('best').textContent=best; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function enable(on){ document.getElementById('hi').disabled=!on; document.getElementById('lo').disabled=!on; document.getElementById('cash').disabled=!on||streak===0; }
+function guess(dir){ if(over||!deck.length)return; sfx('select'); const nx=deck.pop();
+  const n=document.getElementById('next'); const red=nx.s===1||nx.s===2; n.className='bigcard'; n.innerHTML='<div class="bc-rank '+(red?'red':'black')+'">'+RANKS[nx.r]+'</div><div class="bc-suit '+(red?'red':'black')+'">'+SUITS[nx.s]+'</div>';
+  const diff=nx.r-cur.r; const correct=(dir>0&&diff>0)||(dir<0&&diff<0)||(diff===0);
+  setTimeout(()=>{
+    if(correct){ streak++; sfx('win'); cur=nx; showCur(); upd();
+      if(!deck.length){ setMsg('Cleared the whole deck!'); return finish(true); }
+      setMsg(diff===0?'Tie counts as a win — streak '+streak+'!':'Correct! Streak '+streak+'.'); resetNext(); enable(true);
+    } else { sfx('lose'); setMsg('Wrong! It was '+RANKS[nx.r]+SUITS[nx.s]+'.'); finish(false); }
+  }, 350);
+  enable(false);
+}
+function cashOut(){ if(over||streak===0)return; setMsg('Cashed out at streak '+streak+'.'); finish(true); }
+function finish(won){ over=true; enable(false); const r=window.GH?GH.score.best(GAME,'best',streak,'high'):{value:streak,isBest:false}; best=r.value; upd();
+  document.getElementById('win-msg').textContent=won?'💰 BANKED!':'💥 BUST!';
+  document.getElementById('win-sub').textContent='Streak of '+streak+(r.isBest&&streak>0?' — NEW BEST! 🎉':' · Best '+best);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

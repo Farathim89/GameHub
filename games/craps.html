@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Craps</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.cr-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:20px 12px;}
+.cr-credit{font-family:'Orbitron',monospace;font-size:18px;}.cr-credit b{color:#f0c040;font-size:26px;}
+.cr-dice{display:flex;gap:16px;}
+.die{width:68px;height:68px;border-radius:14px;background:#f5f0e4;border:2px solid #333;position:relative;box-shadow:1px 2px 6px rgba(0,0,0,.4);}
+.die.roll{animation:sh .4s}@keyframes sh{0%,100%{transform:translateY(0)}25%{transform:translateY(-8px) rotate(-8deg)}75%{transform:translateY(-8px) rotate(8deg)}}
+.pip{position:absolute;width:13px;height:13px;border-radius:50%;background:#111;}
+.cr-point{font-family:'Orbitron',monospace;font-size:16px;letter-spacing:1px;}
+.cr-point b{color:#e05050;font-size:22px;}
+.cr-msg{font-family:'Orbitron',monospace;font-size:16px;min-height:26px;text-align:center;letter-spacing:1px;}
+.cr-stake{display:flex;align-items:center;gap:10px;font-family:'Orbitron',monospace;}
+.cr-stake button{width:34px;height:34px;border-radius:8px;border:2px solid var(--border);background:var(--surface);color:var(--fg);font-size:18px;cursor:pointer;}
+.cr-roll{font-family:'Orbitron',monospace;font-size:18px;font-weight:800;padding:14px 44px;border-radius:12px;border:3px solid var(--green);background:var(--green);color:#0a140a;cursor:pointer;letter-spacing:2px;}
+.cr-roll:disabled{opacity:.5;cursor:default}
+.cr-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:420px;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">🎲 CRAPS</span>
+  <div class="h-btns"><button class="hbtn" onclick="reset()">RESET</button></div>
+</div>
+<div class="cr-wrap">
+  <div class="cr-credit">CREDITS: <b id="credit">100</b></div>
+  <div class="cr-dice" id="dice"></div>
+  <div class="cr-point" id="point">COME-OUT ROLL</div>
+  <div class="cr-msg" id="msg">Place your Pass Line bet and roll!</div>
+  <div class="cr-stake"><span>PASS BET</span><button onclick="stakeAdj(-5)">−</button><b id="stakev">10</b><button onclick="stakeAdj(5)">+</button></div>
+  <button class="cr-roll" id="roll" onclick="roll()">🎲 ROLL</button>
+  <div class="cr-hint">Come-out: <b>7 or 11</b> wins, <b>2/3/12</b> craps out. Any other number sets the <b>point</b> — roll it again before a <b>7</b> to win.</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💸 BROKE</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="reset()">NEW STAKE</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='craps';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const PIPS={1:[[1,1]],2:[[0,0],[2,2]],3:[[0,0],[1,1],[2,2]],4:[[0,0],[0,2],[2,0],[2,2]],5:[[0,0],[0,2],[1,1],[2,0],[2,2]],6:[[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]};
+let credit=100, stake=10, point=0, busy=false, over=false, betLocked=false;
+function reset(){ credit=100; stake=10; point=0; busy=false; over=false; betLocked=false; document.getElementById('win-overlay').classList.remove('show'); draw([1,1]); setPoint(); upd(); setMsg('Place your Pass Line bet and roll!'); }
+function upd(){ document.getElementById('credit').textContent=credit; document.getElementById('stakev').textContent=stake; document.getElementById('roll').disabled=busy||credit<stake; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function setPoint(){ document.getElementById('point').innerHTML=point?('POINT IS <b>'+point+'</b>'):'COME-OUT ROLL'; }
+function stakeAdj(d){ if(busy||betLocked)return; stake=Math.max(5,Math.min(Math.max(5,credit),stake+d)); upd(); }
+function draw(d){ const el=document.getElementById('dice'); el.innerHTML=''; d.forEach(v=>{ const die=document.createElement('div'); die.className='die roll'; PIPS[v].forEach(([r,c])=>{const p=document.createElement('div');p.className='pip';p.style.left=(10+c*21)+'px';p.style.top=(10+r*21)+'px';die.appendChild(p);}); el.appendChild(die); }); }
+function roll(){ if(busy||over||credit<stake)return; busy=true; sfx('select');
+  if(!betLocked){ credit-=stake; betLocked=true; if(window.GH)GH.chip('#dice',{count:3}); }
+  const d=[1+(0|Math.random()*6),1+(0|Math.random()*6)]; draw(d); const sum=d[0]+d[1];
+  setTimeout(()=>{
+    if(point===0){ // come-out
+      if(sum===7||sum===11){ win('Natural '+sum+' — PASS wins!'); }
+      else if(sum===2||sum===3||sum===12){ lose('Craps ('+sum+') — PASS loses.'); }
+      else { point=sum; setPoint(); setMsg('Point set to '+sum+'. Roll it again before a 7!'); busy=false; upd(); }
+    } else {
+      if(sum===point){ win('Hit the point ('+point+') — PASS wins!'); }
+      else if(sum===7){ lose('Seven out — PASS loses.'); }
+      else { setMsg('Rolled '+sum+'. Keep going — need '+point+' before 7.'); busy=false; upd(); }
+    }
+  }, 450);
+}
+function win(m){ credit+=stake*2; sfx('win'); if(window.GH)GH.chip('#credit',{count:4,color:'#40d070'}); setMsg(m); endRound(); }
+function lose(m){ sfx('lose'); setMsg(m); endRound(); }
+function endRound(){ point=0; betLocked=false; busy=false; setPoint(); upd();
+  if(credit<5){ over=true; document.getElementById('win-sub').textContent='The dice went cold.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),450); }
+  else if(window.GH)GH.score.best(GAME,'best',credit,'high'); }
+reset();
+</script>
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Go Fish</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.gf-wrap{display:flex;flex-direction:column;gap:12px;padding:12px;max-width:760px;margin:0 auto;}
+.gf-sec{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:10px;}
+.gf-lbl{font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);letter-spacing:2px;margin-bottom:6px;}
+.gf-books{display:flex;gap:5px;flex-wrap:wrap;min-height:30px;}
+.gf-book{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:5px 9px;border-radius:6px;background:var(--surface2);border:1px solid var(--green);color:var(--green);}
+.gf-hand{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.gf-rank{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;transition:transform .12s;}
+.gf-rank.ask:hover{transform:translateY(-6px);}
+.gf-rank.dim{opacity:.5;cursor:default;}
+.card{width:54px;height:76px;font-size:19px;} .card .ctop{padding:4px 5px;}
+.gf-badge{font-family:'Orbitron',monospace;font-size:11px;color:var(--accent);}
+.gf-center{display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.gf-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:40px;text-align:center;letter-spacing:1px;max-width:460px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🐟 GO FISH</span>
+  <div class="h-btns">
+    <div class="info-pill">POOL: <span id="pool">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="gf-wrap">
+  <div class="gf-sec"><div class="gf-lbl">🤖 AI — <span id="aiCount">0</span> cards · BOOKS: <span id="aiBooks">0</span></div><div class="gf-books" id="aiBookList"></div></div>
+  <div class="gf-sec gf-center"><div class="card back" style="cursor:pointer" title="pool" onclick=""></div><div class="gf-msg" id="msg"></div></div>
+  <div class="gf-sec"><div class="gf-lbl">🟡 YOU — BOOKS: <span id="myBooks">0</span></div><div class="gf-books" id="myBookList"></div>
+    <div class="gf-lbl" style="margin-top:10px">YOUR HAND — click a rank to ask the AI for it</div>
+    <div class="gf-hand" id="myHand"></div>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='gofish';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let pool=[], you=[], ai=[], myBooks=[], aiBooks=[], turn=0, over=false, busy=false, aiMemory=[];
+function newGame(){
+  over=false; busy=false; turn=0; myBooks=[]; aiBooks=[]; aiMemory=[];
+  pool=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)pool.push({s,r});
+  shuffle(pool);
+  you=pool.splice(0,7); ai=pool.splice(0,7);
+  checkBooks(you,myBooks); checkBooks(ai,aiBooks);
+  document.getElementById('win-overlay').classList.remove('show');
+  setMsg('Your turn — pick a rank you hold and ask the AI.');
+  render();
+  document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*38)+'ms';});
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function checkBooks(hand,books){
+  for(let r=0;r<13;r++){ if(hand.filter(c=>c.r===r).length===4){ books.push(r); for(let i=hand.length-1;i>=0;i--) if(hand[i].r===r) hand.splice(i,1); } }
+}
+function ranksIn(hand){ return [...new Set(hand.map(c=>c.r))].sort((a,b)=>a-b); }
+function setMsg(t){ document.getElementById('msg').innerHTML=t; }
+function cardHTML(card){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function render(){
+  document.getElementById('pool').textContent=pool.length;
+  document.getElementById('aiCount').textContent=ai.length;
+  document.getElementById('aiBooks').textContent=aiBooks.length;
+  document.getElementById('myBooks').textContent=myBooks.length;
+  document.getElementById('aiBookList').innerHTML=aiBooks.map(r=>`<span class="gf-book">${RANKS[r]}</span>`).join('');
+  document.getElementById('myBookList').innerHTML=myBooks.map(r=>`<span class="gf-book">${RANKS[r]}</span>`).join('');
+  const mh=document.getElementById('myHand'); mh.innerHTML='';
+  const myTurn=turn===0&&!over&&!busy;
+  ranksIn(you).forEach(r=>{
+    const cards=you.filter(c=>c.r===r);
+    const div=document.createElement('div'); div.className='gf-rank'+(myTurn?' ask':' dim');
+    div.innerHTML=cardHTML(cards[0])+`<span class="gf-badge">${RANKS[r]} ×${cards.length}</span>`;
+    if(myTurn) div.onclick=()=>askFor(r);
+    mh.appendChild(div);
+  });
+}
+function askFor(rank){
+  if(turn!==0||over||busy) return;
+  busy=true;
+  const have=ai.filter(c=>c.r===rank);
+  if(have.length){
+    setMsg('You asked for <b>'+RANKS[rank]+'</b> — the AI hands over '+have.length+'! Go again.');
+    transfer(ai,you,rank); sfx('coin');
+    afterGet(you,myBooks,0);
+  } else {
+    setMsg('You asked for <b>'+RANKS[rank]+'</b> — 🎣 GO FISH!');
+    aiMemory.push(rank); // AI remembers you wanted this rank
+    draw(you, rank, 0);
+  }
+}
+function transfer(from,to,rank){ for(let i=from.length-1;i>=0;i--) if(from[i].r===rank) to.push(from.splice(i,1)[0]); }
+function draw(hand, wanted, who){
+  if(!pool.length){ return endOrContinue(who,false); }
+  const c=pool.pop(); hand.push(c); sfx('flip');
+  const gotWanted = c.r===wanted;
+  setTimeout(()=>{
+    if(gotWanted){ setMsg('🎉 You fished the '+RANKS[wanted]+' you wanted — go again!'); afterGet(hand, who===0?myBooks:aiBooks, who); }
+    else { afterGet(hand, who===0?myBooks:aiBooks, who, true); }
+  }, 350);
+}
+function afterGet(hand, books, who, passTurn){
+  const before=books.length;
+  const srcEl=document.getElementById(who===0?'myHand':'aiCount'); const srcRect=srcEl?srcEl.getBoundingClientRect():null;
+  checkBooks(hand,books);
+  const madeBook=books.length>before;
+  if(madeBook){ sfx('win'); }
+  render();
+  if(madeBook && srcRect && window.GH){ const dest=document.getElementById(who===0?'myBookList':'aiBookList'); if(dest)GH.slide(srcRect,dest,{bg:'linear-gradient(145deg,#f0c040,#e0a020)'}); }
+  if(!you.length&&pool.length){ while(you.length<1&&pool.length)you.push(pool.pop()); }
+  if(!ai.length&&pool.length){ while(ai.length<1&&pool.length)ai.push(pool.pop()); }
+  if(gameEnded()) return finish();
+  if(passTurn){ turn=1-turn; }
+  busy=false;
+  if(turn===1&&!over){ busy=true; setTimeout(aiTurn,900); }
+  else if(!over){ if(turn===0) setMsg(document.getElementById('msg').innerHTML+'<br><span style="color:var(--dim);font-size:12px">Your turn.</span>'); render(); }
+}
+function endOrContinue(who){ // pool empty on a fish
+  render(); if(gameEnded())return finish();
+  turn=1-turn; busy=false;
+  if(turn===1&&!over){ busy=true; setTimeout(aiTurn,900);}
+}
+function aiTurn(){
+  if(over) return;
+  const ranks=ranksIn(ai);
+  if(!ranks.length){ if(pool.length)ai.push(pool.pop()); busy=false; turn=0; render(); if(gameEnded())return finish(); setMsg('AI had no cards — your turn.'); return; }
+  // prefer a rank the AI knows you hold (from memory), else random
+  let rank = aiMemory.find(r=>ranks.includes(r));
+  if(rank===undefined) rank=ranks[0|Math.random()*ranks.length];
+  const have=you.filter(c=>c.r===rank);
+  if(have.length){
+    setMsg('🤖 AI asks you for <b>'+RANKS[rank]+'</b> — you hand over '+have.length+'. AI goes again.');
+    transfer(you,ai,rank); sfx('hit');
+    aiMemory=aiMemory.filter(r=>r!==rank);
+    afterGet(ai,aiBooks,1);
+  } else {
+    setMsg('🤖 AI asks for <b>'+RANKS[rank]+'</b> — you say GO FISH! 🎣');
+    draw(ai, rank, 1);
+  }
+}
+function gameEnded(){ return myBooks.length+aiBooks.length===13 || (!you.length&&!ai.length&&!pool.length); }
+function finish(){
+  over=true; busy=false; render();
+  const win=myBooks.length>aiBooks.length, tie=myBooks.length===aiBooks.length;
+  if(win&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=tie?'🤝 TIE!':(win?'🏆 YOU WIN!':'🤖 AI WINS!');
+  document.getElementById('win-sub').textContent='Books — You '+myBooks.length+' · AI '+aiBooks.length;
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400);
+}
+newGame();
+</script>
+</body>
+</html>

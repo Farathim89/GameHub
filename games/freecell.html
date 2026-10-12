@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Freecell</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
+<style>
+:root{--cw:64px;--ch:90px;--us:24px;}
+@media(max-width:640px){:root{--cw:46px;--ch:66px;--us:19px;}}
+@media(max-width:460px){:root{--cw:38px;--ch:55px;--us:16px;}}
+.fc-area{padding:10px;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.fc-top{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
+.fc-cols{display:flex;gap:6px;justify-content:center;align-items:flex-start;}
+.slot{width:var(--cw);height:var(--ch);border:2px dashed var(--border);border-radius:7px;position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--border);font-size:20px;transition:border-color .2s;}
+.slot:hover{border-color:var(--dim);}
+.fcol{width:var(--cw);position:relative;}
+.pc{width:var(--cw);height:var(--ch);border-radius:7px;position:absolute;left:0;
+  box-shadow:1px 2px 5px rgba(0,0,0,.5);cursor:pointer;user-select:none;overflow:hidden;
+  font-family:'Nunito',sans-serif;font-weight:900;background:var(--card-front,#f5f0e8);border:1.5px solid rgba(0,0,0,.2);}
+.pc::after{content:'';position:absolute;inset:0;background:linear-gradient(145deg,rgba(255,255,255,.22),transparent 60%);pointer-events:none;}
+.pc.red{color:var(--card-red-ink,#c01020);}
+.pc.blk{color:var(--card-black-ink,#111);}
+.pc .cr{position:absolute;top:3px;left:5px;font-size:calc(var(--cw)*.26);line-height:1;}
+.pc .sr{position:absolute;top:calc(4px + var(--cw)*.26);left:5px;font-size:calc(var(--cw)*.19);line-height:1;}
+.pc .cm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:calc(var(--cw)*.4);opacity:.22;pointer-events:none;}
+.pc.sel{box-shadow:0 0 0 3px var(--accent),2px 4px 10px rgba(0,0,0,.6)!important;transform:translateY(-5px);z-index:99!important;}
+@keyframes fcDeal{from{opacity:0;transform:translate(-20px,-34px) scale(.82) rotate(-5deg);}to{opacity:1;transform:translate(0,0) scale(1) rotate(0);}}
+.pc.fc-deal{animation:fcDeal .34s cubic-bezier(.2,1,.35,1) both;}
+@media (prefers-reduced-motion: reduce){.pc.fc-deal{animation:none!important;}}
+.gap-lbl{font-family:'Orbitron',monospace;font-size:9px;color:var(--dim);letter-spacing:2px;align-self:center;padding:0 6px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🃏 FREECELL</span>
+  <div class="h-btns">
+    <div class="info-pill">MOVES: <span id="mv">0</span></div>
+    <button class="hbtn" onclick="undo()">↩ UNDO</button>
+    <button class="hbtn" onclick="autoMove()">AUTO ✓</button>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+
+<div class="fc-area">
+  <div class="fc-top" id="top-row"></div>
+  <div class="gap-lbl">FREE CELLS ← → FOUNDATIONS · CLICK CARD THEN DESTINATION · DOUBLE-CLICK = TO FOUNDATION</div>
+  <div class="fc-cols" id="cols"></div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+const SUITS=['♠','♥','♦','♣'],RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const isRed=s=>s==='♥'||s==='♦';
+const ri=r=>RANKS.indexOf(r);
+let cas=[],free=[],fnd=[],mv=0,hist=[];
+let SEL=null; // {src:'cas'|'free', col, row} | {src:'free', idx}
+let dealing=false, dealIdx=0;
+
+function newGame(){
+  const d=[];
+  for(const s of SUITS)for(const r of RANKS)d.push({suit:s,rank:r});
+  for(let i=d.length-1;i>0;i--){const j=0|Math.random()*(i+1);[d[i],d[j]]=[d[j],d[i]];}
+  cas=[[],[],[],[],[],[],[],[]];
+  d.forEach((c,i)=>cas[i%8].push(c));
+  free=[null,null,null,null];
+  fnd=[[],[],[],[]];
+  mv=0;hist=[];SEL=null;
+  document.getElementById('mv').textContent=0;
+  document.getElementById('win-overlay').classList.remove('show');
+  dealing=true; dealIdx=0; render(); dealing=false;
+}
+
+function save(){hist.push(JSON.stringify({cas,free,fnd,mv}));if(hist.length>200)hist.shift();}
+function undo(){
+  if(!hist.length)return;
+  const s=JSON.parse(hist.pop());
+  cas=s.cas;free=s.free;fnd=s.fnd;mv=s.mv;SEL=null;
+  document.getElementById('mv').textContent=mv;
+  render();
+}
+function bump(){mv++;document.getElementById('mv').textContent=mv;}
+
+// how many cards can be moved at once
+function moveCapacity(targetEmpty){
+  const fc=free.filter(x=>!x).length;
+  let empt=cas.filter(c=>!c.length).length;
+  if(targetEmpty)empt=Math.max(0,empt-1);
+  return (fc+1)*Math.pow(2,empt);
+}
+// is run starting at row a valid tableau sequence (desc, alt color)?
+function validRun(col,row){
+  const c=cas[col];
+  for(let i=row;i<c.length-1;i++){
+    if(ri(c[i+1].rank)!==ri(c[i].rank)-1)return false;
+    if(isRed(c[i+1].suit)===isRed(c[i].suit))return false;
+  }
+  return true;
+}
+function canStack(card,col){
+  const c=cas[col];
+  if(!c.length)return true;
+  const t=c[c.length-1];
+  return ri(card.rank)===ri(t.rank)-1&&isRed(card.suit)!==isRed(t.suit);
+}
+function canFnd(card,fi){
+  const suits=['♠','♥','♦','♣'];
+  const pile=fnd[fi];
+  if(!pile.length)return card.rank==='A'&&card.suit===suits[fi];
+  const t=pile[pile.length-1];
+  return card.suit===t.suit&&ri(card.rank)===ri(t.rank)+1;
+}
+
+function getSel(){
+  if(!SEL)return null;
+  if(SEL.src==='free')return free[SEL.idx]?[free[SEL.idx]]:null;
+  return cas[SEL.col].slice(SEL.row);
+}
+function removeSel(){
+  if(SEL.src==='free')free[SEL.idx]=null;
+  else cas[SEL.col].splice(SEL.row);
+  SEL=null;
+}
+
+function clickCas(col,row){
+  const c=cas[col];
+  if(SEL){
+    const cards=getSel();
+    if(cards&&canStack(cards[0],col)&&cards.length<=moveCapacity(!c.length)){
+      save();removeSel();cas[col].push(...cards);bump();render();checkWin();return;
+    }
+    if(SEL.src==='cas'&&SEL.col===col&&SEL.row===row){SEL=null;render();return;}
+    SEL=null;
+  }
+  if(row>=0&&row<c.length&&validRun(col,row)){SEL={src:'cas',col,row};}
+  render();
+}
+function dblCas(col,row){
+  const c=cas[col];
+  if(row!==c.length-1)return;
+  const card=c[c.length-1];
+  for(let fi=0;fi<4;fi++)if(canFnd(card,fi)){save();c.pop();fnd[fi].push(card);SEL=null;bump();render();checkWin();return;}
+}
+function clickFree(i){
+  if(SEL){
+    const cards=getSel();
+    if(cards&&cards.length===1&&!free[i]){
+      save();const card=cards[0];removeSel();free[i]=card;bump();render();return;
+    }
+    if(SEL.src==='free'&&SEL.idx===i){SEL=null;render();return;}
+    SEL=null;render();return;
+  }
+  if(free[i]){SEL={src:'free',idx:i};render();}
+}
+function dblFree(i){
+  if(!free[i])return;
+  for(let fi=0;fi<4;fi++)if(canFnd(free[i],fi)){save();fnd[fi].push(free[i]);free[i]=null;SEL=null;bump();render();checkWin();return;}
+}
+function clickFnd(fi){
+  if(!SEL)return;
+  const cards=getSel();
+  if(cards&&cards.length===1&&canFnd(cards[0],fi)){
+    save();const card=cards[0];removeSel();fnd[fi].push(card);bump();render();checkWin();
+  } else {SEL=null;render();}
+}
+
+function autoMove(){
+  let moved=true;
+  while(moved){
+    moved=false;
+    for(let i=0;i<4;i++)if(free[i]){for(let fi=0;fi<4;fi++)if(canFnd(free[i],fi)){fnd[fi].push(free[i]);free[i]=null;moved=true;bump();break;}}
+    for(const c of cas){
+      if(!c.length)continue;
+      const t=c[c.length-1];
+      for(let fi=0;fi<4;fi++)if(canFnd(t,fi)){c.pop();fnd[fi].push(t);moved=true;bump();break;}
+    }
+  }
+  SEL=null;render();checkWin();
+}
+
+function checkWin(){
+  if(fnd.every(p=>p.length===13)){
+    document.getElementById('win-sub').textContent='Moves: '+mv;
+    setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+  }
+}
+
+function cardHTML(card,isSel){
+  return `<div class="pc ${isRed(card.suit)?'red':'blk'}${isSel?' sel':''}">
+    <div class="cr">${card.rank}</div><div class="sr">${card.suit}</div><div class="cm">${card.suit}</div>
+  </div>`;
+}
+
+function render(){
+  if(dealing) dealIdx=0;
+  // top: 4 free cells + 4 foundations
+  const top=document.getElementById('top-row');
+  top.innerHTML='';
+  free.forEach((card,i)=>{
+    const d=document.createElement('div');
+    if(card){
+      d.innerHTML=cardHTML(card,SEL&&SEL.src==='free'&&SEL.idx===i);
+      d.style.cssText='position:relative;width:var(--cw);height:var(--ch);';
+      d.firstElementChild.style.position='relative';
+    } else {
+      d.className='slot';d.textContent='';
+    }
+    d.onclick=()=>clickFree(i);
+    d.ondblclick=()=>dblFree(i);
+    top.appendChild(d);
+  });
+  const sp=document.createElement('div');sp.className='gap-lbl';sp.textContent='|';top.appendChild(sp);
+  const fSym=['♠','♥','♦','♣'];
+  fnd.forEach((pile,fi)=>{
+    const d=document.createElement('div');
+    if(pile.length){
+      d.innerHTML=cardHTML(pile[pile.length-1],false);
+      d.style.cssText='position:relative;width:var(--cw);height:var(--ch);';
+      d.firstElementChild.style.position='relative';
+      d.firstElementChild.style.cursor='default';
+    } else {
+      d.className='slot';d.textContent=fSym[fi];
+    }
+    d.onclick=()=>clickFnd(fi);
+    top.appendChild(d);
+  });
+
+  // cascades
+  const colsEl=document.getElementById('cols');
+  colsEl.innerHTML='';
+  cas.forEach((c,ci)=>{
+    const colEl=document.createElement('div');
+    colEl.className='fcol';
+    const usPx=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--us'))||24;
+    const chPx=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ch'))||90;
+    colEl.style.height=(c.length?((c.length-1)*usPx+chPx):chPx)+'px';
+    if(!c.length){
+      const s=document.createElement('div');s.className='slot';s.style.position='absolute';
+      s.onclick=()=>clickCas(ci,-1);
+      colEl.appendChild(s);
+    }
+    c.forEach((card,r)=>{
+      const w=document.createElement('div');
+      w.innerHTML=cardHTML(card,SEL&&SEL.src==='cas'&&SEL.col===ci&&r>=SEL.row);
+      const el=w.firstElementChild;
+      el.style.top=(r*usPx)+'px';
+      el.style.zIndex=r+1;
+      if(SEL&&SEL.src==='cas'&&SEL.col===ci&&r>=SEL.row)el.style.zIndex=99+r;
+      el.onclick=e=>{e.stopPropagation();clickCas(ci,r);};
+      el.ondblclick=e=>{e.stopPropagation();dblCas(ci,r);};
+      if(dealing){ el.classList.add('fc-deal'); el.style.animationDelay=(dealIdx++*16)+'ms'; }
+      colEl.appendChild(el);
+    });
+    colEl.onclick=e=>{if(e.target===colEl)clickCas(ci,-1);};
+    colsEl.appendChild(colEl);
+  });
+}
+
+newGame();
+</script>
+</body>
+</html>

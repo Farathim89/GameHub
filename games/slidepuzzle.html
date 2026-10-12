@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sliding Puzzle</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.sp-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 12px;}
+.sp-board{position:relative;background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:8px;touch-action:manipulation;}
+.sp-tile{
+  position:absolute;display:flex;align-items:center;justify-content:center;
+  font-family:'Orbitron',monospace;font-weight:900;border-radius:10px;cursor:pointer;
+  background:linear-gradient(145deg,#2a6cc0,#1a4a90);color:#fff;
+  border:2px solid rgba(255,255,255,.18);box-shadow:0 3px 8px rgba(0,0,0,.5);
+  transition:left .13s ease,top .13s ease,transform .08s;user-select:none;
+}
+.sp-tile:hover{transform:scale(1.03);}
+.sp-tile.done{background:linear-gradient(145deg,#1a9a70,#107a52);}
+.sp-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🧩 SLIDING PUZZLE</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()">
+      <option value="3">3×3</option>
+      <option value="4" selected>4×4 (15)</option>
+      <option value="5">5×5</option>
+    </select>
+    <div class="info-pill">MOVES: <span id="moves">0</span></div>
+    <div class="info-pill">TIME: <span id="time">0:00</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+
+<div class="sp-wrap">
+  <div class="sp-hint">Slide tiles into the empty space. Put <b style="color:var(--accent)">1 → N</b> in order to win. Arrow keys also work.</div>
+  <div id="board" class="sp-board"></div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+let N=4, tiles=[], blank=0, moves=0, solved=false, startT=0, timer=null, gap=6;
+
+function boardPx(){ return Math.min(window.innerWidth-50, 440); }
+function tilePx(){ return Math.floor((boardPx()-gap*(N+1))/N); }
+
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  document.getElementById('win-overlay').classList.remove('show');
+  // solved layout: tiles[i]=i (value 0 = blank), blank at last cell
+  tiles=Array.from({length:N*N},(_,i)=>i);
+  blank=N*N-1;
+  shuffle();
+  moves=0; solved=false;
+  render();
+  startTimer();
+}
+
+function neighbors(p){
+  const r=(p/N)|0, c=p%N, out=[];
+  if(r>0)out.push(p-N); if(r<N-1)out.push(p+N);
+  if(c>0)out.push(p-1); if(c<N-1)out.push(p+1);
+  return out;
+}
+
+function shuffle(){
+  // random walk of the blank → always solvable
+  let prev=-1;
+  const steps=N*N*60;
+  for(let k=0;k<steps;k++){
+    const nb=neighbors(blank).filter(p=>p!==prev);
+    const pick=nb[0|Math.random()*nb.length];
+    prev=blank;
+    [tiles[blank],tiles[pick]]=[tiles[pick],tiles[blank]];
+    blank=pick;
+  }
+  if(isSolved()) shuffle();
+}
+
+function isSolved(){ return tiles.every((v,i)=>v===i); }
+
+function tryMove(p){
+  if(solved) return;
+  if(!neighbors(blank).includes(p)) return;
+  [tiles[blank],tiles[p]]=[tiles[p],tiles[blank]];
+  blank=p;
+  moves++;
+  render();
+  if(isSolved()){
+    solved=true; stopTimer();
+    document.getElementById('win-sub').textContent=moves+' moves · '+fmt(Date.now()-startT);
+    setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+  }
+}
+
+// arrow keys: move the tile that slides INTO the blank
+function keyMove(dir){
+  const r=(blank/N)|0, c=blank%N; let p=-1;
+  if(dir==='up'&&r<N-1)p=blank+N;     // tile below slides up
+  if(dir==='down'&&r>0)p=blank-N;     // tile above slides down
+  if(dir==='left'&&c<N-1)p=blank+1;   // tile right slides left
+  if(dir==='right'&&c>0)p=blank-1;    // tile left slides right
+  if(p>=0)tryMove(p);
+}
+
+function render(){
+  const b=document.getElementById('board');
+  if(!b) return;
+  const tp=tilePx(), total=tp*N+gap*(N+1);
+  b.style.width=total+'px'; b.style.height=total+'px';
+  b.innerHTML='';
+  const fs=Math.max(16,Math.floor(tp*0.4));
+  for(let p=0;p<N*N;p++){
+    const v=tiles[p];
+    if(v===N*N-1) continue; // blank (value N*N-1 is the blank slot's "0" — here value===index of last = empty)
+    const d=document.createElement('div');
+    const r=(p/N)|0, c=p%N;
+    d.className='sp-tile'+(v===p?' done':'');
+    d.style.width=tp+'px'; d.style.height=tp+'px';
+    d.style.left=(gap+c*(tp+gap))+'px';
+    d.style.top=(gap+r*(tp+gap))+'px';
+    d.style.fontSize=fs+'px';
+    d.textContent=v+1;
+    d.onclick=()=>tryMove(p);
+    b.appendChild(d);
+  }
+  document.getElementById('moves').textContent=moves;
+}
+
+function fmt(ms){ const s=Math.floor(ms/1000); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+function startTimer(){ startT=Date.now(); stopTimer(); timer=setInterval(()=>{document.getElementById('time').textContent=fmt(Date.now()-startT);},500); }
+function stopTimer(){ if(timer){clearInterval(timer);timer=null;} }
+
+document.addEventListener('keydown',e=>{
+  const m={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
+  if(m[e.key]){ e.preventDefault(); keyMove(m[e.key]); }
+});
+window.addEventListener('resize',()=>{ if(tiles.length) render(); });
+newGame();
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dominosa</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<script src="../themes/themes.js" defer></script><link rel="stylesheet" href="../themes/themes.css">
+<script src="../lang/lang.js" defer></script>
+<style>
+.do-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.do-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:470px;line-height:1.6;}
+.do-grid{display:grid;gap:0;position:relative;background:var(--border);border-radius:10px;padding:6px;}
+.do-c{display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;background:var(--surface2);margin:3px;border-radius:8px;cursor:pointer;transition:all .1s;border:2px solid transparent;}
+.do-c.sel{border-color:var(--accent);transform:scale(1.05);}
+.do-c.paired{background:#2a3350;}
+.do-tally{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:470px;}
+.do-tally .dup{color:#e05050}.do-tally .ok{color:var(--green)}
+.do-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">🁢 DOMINOSA</span>
+  <div class="h-btns"><select id="size-sel" onchange="newGame()"><option value="2">Easy (0–2)</option><option value="3" selected>Medium (0–3)</option><option value="4">Hard (0–4)</option></select><button class="hbtn" onclick="clearAll()">CLEAR</button><button class="hbtn" onclick="newGame()">NEW</button></div>
+</div>
+<div class="do-wrap">
+  <div class="do-hint">Cover the grid with dominoes. The complete set from <b>0–0</b> up to <b>N–N</b> must be used, each domino <b>exactly once</b>. Click two neighbouring cells to join them; click a joined cell to split.</div>
+  <div class="do-grid" id="grid"></div>
+  <div class="do-tally" id="tally"></div>
+  <div class="do-msg" id="msg"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='dominosa';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let MAX=3, R=0, C=0, val=[], owner=[], dominoes=[], sel=null, over=false;
+function newGame(){ MAX=parseInt(document.getElementById('size-sel').value,10); R=MAX+1; C=MAX+2; over=false; sel=null; document.getElementById('win-overlay').classList.remove('show'); gen(); owner=Array.from({length:R},()=>Array(C).fill(-1)); dominoes=[]; render(); setMsg(''); }
+function tile(){ // random domino tiling of R x C via backtracking
+  const cov=Array.from({length:R},()=>Array(C).fill(false)); const pairs=[];
+  function firstFree(){ for(let r=0;r<R;r++)for(let c=0;c<C;c++)if(!cov[r][c])return [r,c]; return null; }
+  function solve(){ const f=firstFree(); if(!f)return true; const [r,c]=f; const dirs=[[0,1],[1,0],[0,-1],[-1,0]]; for(let i=dirs.length-1;i>0;i--){const j=0|Math.random()*(i+1);[dirs[i],dirs[j]]=[dirs[j],dirs[i]];}
+    for(const [dr,dc] of dirs){ const nr=r+dr,nc=c+dc; if(nr<0||nc<0||nr>=R||nc>=C||cov[nr][nc])continue; cov[r][c]=cov[nr][nc]=true; pairs.push([[r,c],[nr,nc]]); if(solve())return true; pairs.pop(); cov[r][c]=cov[nr][nc]=false; }
+    return false; }
+  solve(); return pairs;
+}
+function allPairs(){ const p=[]; for(let a=0;a<=MAX;a++)for(let b=a;b<=MAX;b++)p.push([a,b]); return p; }
+function gen(){ const pairs=tile(); const set=allPairs(); // shuffle set, assign to tiles
+  for(let i=set.length-1;i>0;i--){const j=0|Math.random()*(i+1);[set[i],set[j]]=[set[j],set[i]];}
+  val=Array.from({length:R},()=>Array(C).fill(0));
+  pairs.forEach((pr,i)=>{ const [a,b]=set[i]; const [[r1,c1],[r2,c2]]=pr; if(Math.random()<0.5){ val[r1][c1]=a; val[r2][c2]=b; } else { val[r1][c1]=b; val[r2][c2]=a; } });
+}
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function clearAll(){ if(over)return; owner=Array.from({length:R},()=>Array(C).fill(-1)); dominoes=[]; sel=null; render(); setMsg(''); }
+function adjacent(a,b){ return (a[0]===b[0]&&Math.abs(a[1]-b[1])===1)||(a[1]===b[1]&&Math.abs(a[0]-b[0])===1); }
+function click(r,c){ if(over)return; sfx('select');
+  if(owner[r][c]>=0){ // split
+    const id=owner[r][c]; dominoes[id].cells.forEach(([rr,cc])=>owner[rr][cc]=-1); dominoes[id]=null; sel=null; render(); check(); return; }
+  if(!sel){ sel=[r,c]; render(); return; }
+  if(sel[0]===r&&sel[1]===c){ sel=null; render(); return; }
+  if(adjacent(sel,[r,c])&&owner[sel[0]][sel[1]]<0){ const id=dominoes.length; dominoes.push({cells:[[sel[0],sel[1]],[r,c]]}); owner[sel[0]][sel[1]]=id; owner[r][c]=id; sel=null; sfx('place'); render(); check(); }
+  else { sel=[r,c]; render(); }
+}
+function render(){ const g=document.getElementById('grid'); const sz=Math.floor(Math.min(window.innerWidth-50,460)/C); g.style.gridTemplateColumns='repeat('+C+','+sz+'px)'; g.innerHTML='';
+  for(let r=0;r<R;r++)for(let c=0;c<C;c++){ const d=document.createElement('div'); d.className='do-c'+(owner[r][c]>=0?' paired':'')+(sel&&sel[0]===r&&sel[1]===c?' sel':''); d.style.width=(sz-6)+'px'; d.style.height=(sz-6)+'px'; d.style.fontSize=(sz*0.42)+'px'; d.textContent=val[r][c]; d.onclick=()=>click(r,c); g.appendChild(d); }
+  tally();
+}
+function tally(){ const counts={}; dominoes.forEach(dm=>{ if(!dm)return; const [[r1,c1],[r2,c2]]=dm.cells; const a=val[r1][c1],b=val[r2][c2]; const k=Math.min(a,b)+'-'+Math.max(a,b); counts[k]=(counts[k]||0)+1; });
+  const el=document.getElementById('tally'); const parts=Object.entries(counts).map(([k,v])=>'<span class="'+(v>1?'dup':'ok')+'">'+k+(v>1?'×'+v:'')+'</span>'); el.innerHTML=parts.length?('Placed: '+parts.join('  ')):'No dominoes placed yet'; }
+function check(){ let covered=0; for(let r=0;r<R;r++)for(let c=0;c<C;c++)if(owner[r][c]>=0)covered++;
+  const live=dominoes.filter(d=>d); if(covered<R*C){ setMsg(covered+' / '+(R*C)+' covered'); return; }
+  const seen=new Set(); let dup=false; live.forEach(dm=>{ const [[r1,c1],[r2,c2]]=dm.cells; const k=Math.min(val[r1][c1],val[r2][c2])+'-'+Math.max(val[r1][c1],val[r2][c2]); if(seen.has(k))dup=true; seen.add(k); });
+  if(dup){ setMsg('Full — but a domino is used twice.'); return; } win();
+}
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='Complete domino set placed! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250); }
+window.addEventListener('resize',()=>{ if(val.length)render(); });
+newGame();
+</script>
+</body>
+</html>

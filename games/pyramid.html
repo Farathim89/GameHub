@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pyramid Solitaire</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.py-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 8px;}
+.py-pyramid{position:relative;width:100%;max-width:560px;height:330px;}
+.card{position:absolute;width:62px;height:88px;font-size:20px;cursor:pointer;transition:box-shadow .12s,transform .12s;}
+.card .ctop{padding:4px 6px;}
+.card.exposed{cursor:pointer;}
+.card.covered{opacity:.78;cursor:default;}
+.card.sel{box-shadow:0 0 0 3px var(--accent),2px 3px 12px rgba(0,0,0,.6);transform:translateY(-4px);z-index:50;}
+.py-bottom{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.py-pile{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.py-lbl{font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);letter-spacing:1px;}
+.py-empty{width:62px;height:88px;border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--dim);cursor:pointer;font-size:11px;font-family:'Orbitron',monospace;}
+.py-msg{font-family:'Orbitron',monospace;font-size:13px;min-height:20px;letter-spacing:1px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">🔺 PYRAMID</span>
+  <div class="h-btns">
+    <div class="info-pill">LEFT: <span id="left">28</span></div>
+    <div class="info-pill">REDEALS: <span id="redeals">2</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="py-wrap">
+  <div class="py-msg" id="msg">Pair exposed cards that add up to 13. Kings go alone.</div>
+  <div class="py-pyramid" id="pyramid"></div>
+  <div class="py-bottom">
+    <div class="py-pile"><div class="py-lbl">STOCK (<span id="stockN">0</span>)</div><div id="stock"></div></div>
+    <div class="py-pile"><div class="py-lbl">WASTE</div><div id="waste"></div></div>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 CLEARED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='pyramid';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let pyramid=[], stock=[], waste=[], sel=null, redeals=2, over=false, stockPass=[];
+function val(card){ return card.r+1; } // A=1 ... K=13
+function newGame(){
+  let deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck);
+  pyramid=[];
+  for(let row=0;row<7;row++){ pyramid[row]=[]; for(let col=0;col<=row;col++) pyramid[row][col]={card:deck.pop(),removed:false}; }
+  stock=deck; waste=[]; sel=null; redeals=2; over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  render();
+  document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*34)+'ms';});
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function cell(r,c){ return (pyramid[r]&&pyramid[r][c])||null; }
+function exposed(r,c){ const e=cell(r,c); if(!e||e.removed)return false; if(r===6)return true; const a=cell(r+1,c),b=cell(r+1,c+1); return (!a||a.removed)&&(!b||b.removed); }
+function leftCount(){ let n=0; pyramid.forEach(row=>row.forEach(e=>{if(!e.removed)n++;})); return n; }
+function cardHTML(card,cls){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'} ${cls||''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function render(){
+  const py=document.getElementById('pyramid'); py.innerHTML='';
+  const maxW=Math.min(560, window.innerWidth-20); const cw=Math.min(62, maxW/8); const ch=cw*1.42; const gapx=cw*0.92; const gapy=ch*0.42;
+  for(let r=0;r<7;r++)for(let c=0;c<=r;c++){
+    const e=cell(r,c); if(e.removed)continue;
+    const exp=exposed(r,c);
+    const x=(maxW/2) - (r*gapx)/2 + c*gapx - cw/2;
+    const y=r*gapy;
+    const div=document.createElement('div'); div.innerHTML=cardHTML(e.card,(exp?'exposed':'covered')+((sel&&sel.type==='py'&&sel.r===r&&sel.c===c)?' sel':''));
+    const el=div.firstChild; el.style.left=x+'px'; el.style.top=y+'px'; el.style.width=cw+'px'; el.style.height=ch+'px';
+    if(exp) el.onclick=()=>clickPy(r,c);
+    py.appendChild(el);
+  }
+  // stock
+  const st=document.getElementById('stock');
+  st.innerHTML = stock.length? '<div class="card back" style="cursor:pointer"></div>' : '<div class="py-empty">↻</div>';
+  st.firstChild.onclick=drawStock;
+  document.getElementById('stockN').textContent=stock.length;
+  // waste
+  const w=document.getElementById('waste');
+  if(waste.length){ w.innerHTML=cardHTML(waste[waste.length-1], (sel&&sel.type==='waste')?'sel':''); w.firstChild.onclick=clickWaste; }
+  else w.innerHTML='<div class="py-empty">—</div>';
+  document.getElementById('left').textContent=leftCount();
+  document.getElementById('redeals').textContent=redeals;
+  if(leftCount()===0 && !over) win();
+}
+function drawStock(){
+  if(over) return;
+  if(stock.length){ waste.push(stock.pop()); sel=null; sfx('flip'); render(); }
+  else if(redeals>0){ redeals--; stock=waste.reverse(); waste=[]; sel=null; sfx('flip'); render(); }
+  else { document.getElementById('msg').textContent='No redeals left!'; }
+}
+function tryRemove(a,b){ // a,b are {type, val, ...}
+  if(a.val+b.val===13){
+    doRemove(a); doRemove(b); sel=null; sfx('place'); document.getElementById('msg').textContent='Removed '+a.val+' + '+b.val+' = 13 ✓'; render(); return true;
+  }
+  return false;
+}
+function doRemove(ref){ if(ref.type==='py') pyramid[ref.r][ref.c].removed=true; else waste.pop(); }
+function clickPy(r,c){
+  if(over) return;
+  const card=cell(r,c).card; const v=val(card);
+  if(v===13){ pyramid[r][c].removed=true; sel=null; sfx('place'); document.getElementById('msg').textContent='King removed!'; render(); return; }
+  const ref={type:'py',r,c,val:v};
+  if(!sel){ sel=ref; sfx('select'); render(); return; }
+  if(sel.type==='py'&&sel.r===r&&sel.c===c){ sel=null; render(); return; }
+  if(!tryRemove(sel,ref)){ sel=ref; sfx('select'); document.getElementById('msg').textContent='Those don\'t add to 13 — reselected.'; render(); }
+}
+function clickWaste(){
+  if(over||!waste.length) return;
+  const card=waste[waste.length-1]; const v=val(card);
+  if(v===13){ waste.pop(); sel=null; sfx('place'); document.getElementById('msg').textContent='King removed!'; render(); return; }
+  const ref={type:'waste',val:v};
+  if(!sel){ sel=ref; sfx('select'); render(); return; }
+  if(sel.type==='waste'){ sel=null; render(); return; }
+  if(!tryRemove(sel,ref)){ sel=ref; sfx('select'); render(); }
+}
+function win(){
+  over=true;
+  if(window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-sub').textContent='You cleared the whole pyramid! 🎉';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+window.addEventListener('resize',()=>{ if(pyramid.length) render(); });
+newGame();
+</script>
+</body>
+</html>

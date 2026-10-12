@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Roulette</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ro-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 12px;}
+.ro-credit{font-family:'Orbitron',monospace;font-size:18px;}.ro-credit b{color:#f0c040;font-size:26px;}
+#wheel{display:block;}
+.ro-result{font-family:'Orbitron',monospace;font-size:20px;min-height:30px;}
+.ro-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;color:var(--dim);}
+.ro-bets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:420px;width:100%;}
+.ro-bet{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;padding:12px 6px;border-radius:9px;border:2px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer;}
+.ro-bet.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset;}
+.ro-bet.red{color:#e05050}.ro-bet.black{color:#aaa}
+.ro-stake{display:flex;align-items:center;gap:10px;font-family:'Orbitron',monospace;}
+.ro-stake button{width:34px;height:34px;border-radius:8px;border:2px solid var(--border);background:var(--surface);color:var(--fg);font-size:18px;cursor:pointer;}
+.ro-spin{font-family:'Orbitron',monospace;font-size:17px;font-weight:800;padding:13px 40px;border-radius:12px;border:3px solid var(--green);background:var(--green);color:#0a140a;cursor:pointer;letter-spacing:2px;}
+.ro-spin:disabled{opacity:.5;cursor:default}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">🎡 ROULETTE</span>
+  <div class="h-btns"><button class="hbtn" onclick="reset()">RESET</button></div>
+</div>
+<div class="ro-wrap">
+  <div class="ro-credit">CREDITS: <b id="credit">100</b></div>
+  <canvas id="wheel" width="240" height="240"></canvas>
+  <div class="ro-result" id="result">Place a bet & spin</div>
+  <div class="ro-msg" id="msg"></div>
+  <div class="ro-bets" id="bets"></div>
+  <div class="ro-stake"><span>STAKE</span><button onclick="stakeAdj(-5)">−</button><b id="stakev">10</b><button onclick="stakeAdj(5)">+</button></div>
+  <button class="ro-spin" id="spin" onclick="spin()">🎡 SPIN</button>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💸 BROKE</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="reset()">NEW STAKE</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='roulette';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const ORDER=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const REDS=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const BETS=[{k:'red',l:'RED',pay:2,c:'red'},{k:'black',l:'BLACK',pay:2,c:'black'},{k:'even',l:'EVEN',pay:2},{k:'odd',l:'ODD',pay:2},{k:'low',l:'1–18',pay:2},{k:'high',l:'19–36',pay:2},{k:'d1',l:'1st 12',pay:3},{k:'d2',l:'2nd 12',pay:3},{k:'d3',l:'3rd 12',pay:3}];
+let credit=100, stake=10, sel='red', busy=false, over=false, angle=0;
+const cv=document.getElementById('wheel'), ctx=cv.getContext('2d');
+function colorOf(n){ return n===0?'green':(REDS.has(n)?'red':'black'); }
+function reset(){ credit=100; stake=10; sel='red'; busy=false; over=false; angle=0; document.getElementById('win-overlay').classList.remove('show'); renderBets(); upd(); document.getElementById('result').textContent='Place a bet & spin'; document.getElementById('msg').textContent=''; drawWheel(); }
+function renderBets(){ const b=document.getElementById('bets'); b.innerHTML=''; BETS.forEach(bt=>{ const d=document.createElement('button'); d.className='ro-bet'+(bt.c?' '+bt.c:'')+(sel===bt.k?' sel':''); d.textContent=bt.l+' ('+bt.pay+'×)'; d.onclick=()=>{ if(busy)return; sel=bt.k; renderBets(); }; b.appendChild(d); }); }
+function upd(){ document.getElementById('credit').textContent=credit; document.getElementById('stakev').textContent=stake; document.getElementById('spin').disabled=busy||credit<stake; }
+function stakeAdj(d){ if(busy)return; stake=Math.max(5,Math.min(Math.max(5,credit),stake+d)); upd(); }
+function drawWheel(){ const cx=120,cy=120,R=112,n=ORDER.length; ctx.clearRect(0,0,240,240);
+  for(let i=0;i<n;i++){ const a0=angle+i/n*2*Math.PI, a1=angle+(i+1)/n*2*Math.PI; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0,a1); ctx.closePath(); const col=colorOf(ORDER[i]); ctx.fillStyle=col==='green'?'#1a9c4a':(col==='red'?'#c02030':'#1a1a1a'); ctx.fill(); ctx.strokeStyle='#0008'; ctx.stroke();
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate((a0+a1)/2); ctx.fillStyle='#fff'; ctx.font='bold 10px Orbitron,monospace'; ctx.textAlign='right'; ctx.fillText(ORDER[i],R-4,3); ctx.restore(); }
+  ctx.beginPath(); ctx.arc(cx,cy,30,0,7); ctx.fillStyle='#2a1a3a'; ctx.fill(); ctx.strokeStyle='#f0c040'; ctx.lineWidth=2; ctx.stroke();
+  // pointer at top
+  ctx.beginPath(); ctx.moveTo(cx-10,4); ctx.lineTo(cx+10,4); ctx.lineTo(cx,22); ctx.closePath(); ctx.fillStyle='#f0c040'; ctx.fill(); }
+function wins(n){ const col=colorOf(n); switch(sel){ case'red':return col==='red'; case'black':return col==='black'; case'even':return n!==0&&n%2===0; case'odd':return n%2===1; case'low':return n>=1&&n<=18; case'high':return n>=19&&n<=36; case'd1':return n>=1&&n<=12; case'd2':return n>=13&&n<=24; case'd3':return n>=25&&n<=36; } return false; }
+function spin(){ if(busy||over||credit<stake)return; busy=true; credit-=stake; upd(); sfx('select');
+  if(window.GH)GH.chip('#wheel',{count:3});
+  const result=0|Math.random()*37; const idx=ORDER.indexOf(result); const n=ORDER.length;
+  // target angle so that slice idx center is at top (pointer at -PI/2)
+  const sliceMid=(idx+0.5)/n*2*Math.PI; const target=(-Math.PI/2 - sliceMid) - 2*Math.PI*6; // spin 6 turns ccw
+  const start=angle, t0=performance.now(), dur=3200;
+  function anim(now){ const p=Math.min(1,(now-t0)/dur); const e=1-Math.pow(1-p,3); angle=start+(target-start)*e; drawWheel(); if(p<1){ requestAnimationFrame(anim); } else finish(result); }
+  requestAnimationFrame(anim);
+}
+function finish(n){ const bt=BETS.find(b=>b.k===sel); const won=wins(n); const col=colorOf(n);
+  document.getElementById('result').innerHTML='<span style="color:'+(col==='red'?'#e05050':col==='green'?'#4ad07a':'#ccc')+'">'+n+' '+col.toUpperCase()+'</span>';
+  if(won){ const pay=stake*bt.pay; credit+=pay; document.getElementById('msg').textContent='Your '+bt.l+' bet wins '+pay+'!'; sfx('win'); if(window.GH)GH.chip('#credit',{count:Math.min(8,2+bt.pay),color:'#40d070'}); } else { document.getElementById('msg').textContent='Your '+bt.l+' bet loses.'; sfx('lose'); }
+  busy=false; upd();
+  if(credit<5){ over=true; document.getElementById('win-sub').textContent='The house got you this time.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500); }
+  else if(window.GH)GH.score.best(GAME,'best',credit,'high');
+}
+reset();
+</script>
+</body>
+</html>

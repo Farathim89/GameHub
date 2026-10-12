@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visual Memory</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.vm-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 12px;}
+.vm-stats{display:flex;gap:26px;font-family:'Orbitron',monospace;font-size:14px;}
+.vm-stats b{color:var(--accent);font-size:20px;display:block;}
+.vm-hearts{font-size:18px;letter-spacing:3px;}
+.vm-grid{display:grid;gap:8px;}
+.vm-c{aspect-ratio:1;border-radius:10px;background:var(--surface);border:2px solid var(--border);cursor:pointer;transition:background .15s,transform .08s;}
+.vm-c.lit{background:#eef3ff;border-color:#fff;}
+.vm-c.right{background:var(--green);border-color:var(--green);}
+.vm-c.wrong{background:#c02030;border-color:#c02030;}
+.vm-c.locked{cursor:default}
+.vm-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;letter-spacing:1px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🧠 VISUAL MEMORY</span>
+  <div class="h-btns"><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">RESTART</button></div>
+</div>
+<div class="vm-wrap">
+  <div class="vm-stats"><div>LEVEL<b id="level">1</b></div><div>LIVES<b class="vm-hearts" id="lives">❤️❤️❤️</b></div></div>
+  <div class="vm-grid" id="grid"></div>
+  <div class="vm-msg" id="msg">Watch the tiles, then click the ones that lit up.</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='visualmemory';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let level=1, lives=3, N=3, pattern=new Set(), found=new Set(), wrong=0, locked=true, best, over=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+document.getElementById('best').textContent=best;
+function newGame(){ level=1; lives=3; over=false; document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; startLevel(); }
+function gridSize(){ return Math.min(7, 3+Math.floor((level-1)/3)); }
+function numLit(){ return Math.min(N*N-2, 2+level); }
+function startLevel(){ N=gridSize(); const count=Math.min(N*N-1, 2+level); pattern=new Set(); while(pattern.size<count)pattern.add(0|Math.random()*(N*N)); found=new Set(); wrong=0; locked=true;
+  document.getElementById('level').textContent=level; updLives(); setMsg('Memorise…'); render(); showPattern();
+  setTimeout(()=>{ locked=false; render(); setMsg('Click the '+pattern.size+' tiles that lit up.'); }, 900+count*120); }
+function showPattern(){ render(true); }
+function updLives(){ document.getElementById('lives').textContent='❤️'.repeat(Math.max(0,lives))||'💀'; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function render(reveal){ const g=document.getElementById('grid'); const cell=Math.floor(Math.min(window.innerWidth-40,400)/N); g.style.gridTemplateColumns='repeat('+N+','+cell+'px)'; g.innerHTML='';
+  for(let i=0;i<N*N;i++){ const d=document.createElement('div'); let cls='vm-c'; if(reveal&&pattern.has(i))cls+=' lit'; if(found.has(i))cls+=' right'; if(locked)cls+=' locked'; d.className=cls; d.style.width=cell+'px'; const idx=i; d.onclick=()=>click(idx); g.appendChild(d); } }
+function click(i){ if(locked||over||found.has(i))return;
+  if(pattern.has(i)){ found.add(i); sfx('pop'); const el=document.getElementById('grid').children[i]; el.className='vm-c right locked';
+    if(found.size===pattern.size){ locked=true; sfx('win'); level++; if(level-1>best){ best=level-1; if(window.GH)GH.score.best(GAME,'best',best,'high'); document.getElementById('best').textContent=best; } setMsg('Nice! Level '+level); setTimeout(startLevel,700); }
+  } else { sfx('error'); const el=document.getElementById('grid').children[i]; el.className='vm-c wrong locked'; lives--; updLives(); if(lives<=0){ return finish(); } setMsg('Miss! '+lives+' lives left.'); }
+}
+function finish(){ over=true; locked=true; document.getElementById('win-msg').textContent='REACHED LEVEL '+level; document.getElementById('win-sub').textContent='Best level '+best+'. '+(level>5?'Sharp memory!':'Keep training!'); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

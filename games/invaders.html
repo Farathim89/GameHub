@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Space Invaders</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.si-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#invaders{background:#05060c;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.si-ctrls{display:flex;gap:8px;}
+.si-ctrls button{font-size:20px;width:64px;height:50px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.si-ctrls button:active{background:rgba(64,192,160,.2);}
+.si-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">👾 SPACE INVADERS</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <div class="info-pill">LIVES: <span id="lives">3</span></div>
+    <div class="info-pill">WAVE: <span id="wave">1</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="si-wrap">
+  <div class="si-hint">Move: <b>← → / A D</b> · Fire: <b>Space</b> · or use the buttons.</div>
+  <canvas id="invaders" width="560" height="440"></canvas>
+  <div class="si-ctrls">
+    <button onpointerdown="hold('l',1)" onpointerup="hold('l',0)" onpointerleave="hold('l',0)">◀</button>
+    <button onpointerdown="shoot()">🔫</button>
+    <button onpointerdown="hold('r',1)" onpointerup="hold('r',0)" onpointerleave="hold('r',0)">▶</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='invaders';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('invaders'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height;
+let ship, aliens, bullets, bombs, score, best, lives, wave, dir, speed, over, raf, left=false, right=false, lastShot=0, moveAcc=0;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  score=0; lives=3; wave=1; over=false;
+  ship={x:W/2-18,y:H-30,w:36,h:14,speed:5};
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('best').textContent=best;
+  spawnWave();
+  bullets=[]; bombs=[];
+  updateHud();
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+}
+function spawnWave(){
+  aliens=[]; dir=1; speed=0.5+wave*0.15; moveAcc=0;
+  const rows=4, cols=9, ox=50, oy=50, gx=50, gy=38;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)
+    aliens.push({x:ox+c*gx,y:oy+r*gy,w:30,h:20,alive:true,row:r});
+}
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  if(left)ship.x-=ship.speed; if(right)ship.x+=ship.speed;
+  ship.x=Math.max(0,Math.min(W-ship.w,ship.x));
+  // aliens move as a block; step horizontally, drop + reverse at edges
+  moveAcc+=speed;
+  if(moveAcc>=6){
+    moveAcc=0;
+    const live=aliens.filter(a=>a.alive);
+    const minX=Math.min(...live.map(a=>a.x)), maxX=Math.max(...live.map(a=>a.x+a.w));
+    if((dir>0&&maxX+8>=W)||(dir<0&&minX-8<=0)){ dir*=-1; live.forEach(a=>a.y+=16); }
+    else live.forEach(a=>a.x+=8*dir);
+    // random alien drops a bomb
+    if(live.length&&Math.random()<0.25+wave*0.03){ const a=live[0|Math.random()*live.length]; bombs.push({x:a.x+a.w/2,y:a.y+a.h,vy:3+wave*0.3}); }
+  }
+  // bullets
+  bullets.forEach(b=>b.y-=9); bullets=bullets.filter(b=>b.y>-10);
+  for(const b of bullets){
+    for(const a of aliens){ if(a.alive&&b.x>a.x&&b.x<a.x+a.w&&b.y>a.y&&b.y<a.y+a.h){ a.alive=false; b.dead=true; score+=(4-a.row)*10; sfx('hit'); updateHud(); break; } }
+  }
+  bullets=bullets.filter(b=>!b.dead);
+  // bombs
+  bombs.forEach(b=>b.y+=b.vy); bombs=bombs.filter(b=>b.y<H+10);
+  for(const b of bombs){ if(b.x>ship.x&&b.x<ship.x+ship.w&&b.y>ship.y&&b.y<ship.y+ship.h){ b.dead=true; hitShip(); } }
+  bombs=bombs.filter(b=>!b.dead);
+  // aliens reach bottom
+  if(aliens.some(a=>a.alive&&a.y+a.h>=ship.y)){ return endGame(false); }
+  // wave cleared
+  if(aliens.every(a=>!a.alive)){ wave++; sfx('win'); bombs=[]; spawnWave(); updateHud(); }
+}
+function hitShip(){
+  lives--; sfx('lose'); updateHud();
+  if(lives<=0) endGame(false);
+  else { ship.x=W/2-18; bombs=[]; }
+}
+function shoot(){
+  if(over) return;
+  const now=performance.now();
+  if(now-lastShot<280) return;
+  lastShot=now;
+  bullets.push({x:ship.x+ship.w/2,y:ship.y}); sfx('select');
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // aliens
+  for(const a of aliens){ if(!a.alive)continue;
+    ctx.fillStyle=['#e05050','#f0a040','#40c0a0','#5090e0'][a.row%4];
+    ctx.fillRect(a.x,a.y,a.w,a.h);
+    ctx.fillStyle='#05060c'; ctx.fillRect(a.x+6,a.y+6,5,5); ctx.fillRect(a.x+a.w-11,a.y+6,5,5);
+  }
+  // ship
+  ctx.fillStyle='#40c0a0'; ctx.fillRect(ship.x,ship.y,ship.w,ship.h); ctx.fillRect(ship.x+ship.w/2-3,ship.y-7,6,7);
+  // bullets/bombs
+  ctx.fillStyle='#f0f0f0'; bullets.forEach(b=>ctx.fillRect(b.x-1.5,b.y-8,3,8));
+  ctx.fillStyle='#f0c040'; bombs.forEach(b=>ctx.fillRect(b.x-1.5,b.y,3,8));
+}
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('lives').textContent=lives; document.getElementById('wave').textContent=wave; }
+function endGame(won){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-msg').textContent='💥 GAME OVER';
+  document.getElementById('win-sub').textContent='Score '+score+' · wave '+wave+(r.isBest&&score>0?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+function hold(k,v){ if(k==='l')left=!!v; else right=!!v; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a'){left=true;e.preventDefault();}
+  if(e.key==='ArrowRight'||e.key==='d'){right=true;e.preventDefault();}
+  if(e.key===' '){shoot();e.preventDefault();}
+});
+document.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft'||e.key==='a')left=false; if(e.key==='ArrowRight'||e.key==='d')right=false; });
+newGame();
+</script>
+</body>
+</html>

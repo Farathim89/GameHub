@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Old Maid</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.om-wrap{display:flex;flex-direction:column;gap:12px;padding:12px;max-width:820px;margin:0 auto;}
+.om-sec{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:10px;}
+.om-lbl{font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);letter-spacing:2px;margin-bottom:8px;}
+.om-hand{display:flex;gap:4px;flex-wrap:wrap;}
+.card{width:50px;height:70px;font-size:17px;} .card .ctop{padding:3px 5px;}
+.card.pick{cursor:pointer;transition:transform .12s;} .card.pick:hover{transform:translateY(-8px);box-shadow:0 0 0 2px var(--accent);}
+.om-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:40px;text-align:center;letter-spacing:1px;}
+.om-active{box-shadow:0 0 0 2px var(--accent);}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">👵 OLD MAID</span>
+  <div class="h-btns">
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="om-wrap">
+  <div class="om-sec" id="sec1"><div class="om-lbl">🤖 LEFT (AI) — <span id="c1">0</span> cards</div><div class="om-hand" id="h1"></div></div>
+  <div class="om-sec" id="sec2"><div class="om-lbl">🤖 RIGHT (AI) — <span id="c2">0</span> cards</div><div class="om-hand" id="h2"></div></div>
+  <div class="om-msg" id="msg"></div>
+  <div class="om-sec" id="sec0"><div class="om-lbl">🟡 YOU — <span id="c0">0</span> cards</div><div class="om-hand" id="h0"></div></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🎉 SAFE!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='oldmaid';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let hands=[[],[],[]], out=[false,false,false], current=0, over=false, busy=false, awaitingPick=false;
+function newGame(){
+  let deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r});
+  // remove one Queen (rank 11) -> the Old Maid is the leftover Queen
+  const qi=deck.findIndex(c=>c.r===11); deck.splice(qi,1);
+  shuffle(deck);
+  hands=[[],[],[]]; let p=0; while(deck.length){ hands[p].push(deck.pop()); p=(p+1)%3; }
+  hands.forEach(removePairs);
+  out=hands.map(h=>h.length===0); current=0; over=false; busy=false; awaitingPick=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  setMsg('Your turn — click a card from the LEFT player to draw.');
+  nextTurn(true);
+  setTimeout(function(){document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*26)+'ms';});},0);
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function removePairs(hand){
+  let changed=true;
+  while(changed){ changed=false;
+    for(let i=0;i<hand.length;i++){ for(let j=i+1;j<hand.length;j++){ if(hand[i].r===hand[j].r){ hand.splice(j,1); hand.splice(i,1); changed=true; break; } } if(changed)break; }
+  }
+}
+function setMsg(t){ document.getElementById('msg').innerHTML=t; }
+function cardHTML(card,cls){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'} ${cls||''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function activeCount(){ return hands.filter(h=>h.length>0).length; }
+function nextActiveAfter(i){ for(let k=1;k<=3;k++){ const n=(i+k)%3; if(hands[n].length>0) return n; } return -1; }
+function render(){
+  for(let i=0;i<3;i++) document.getElementById('c'+i).textContent=hands[i].length;
+  // your hand face-up
+  document.getElementById('h0').innerHTML=hands[0].map(c=>cardHTML(c)).join('');
+  // AI hands face-down; if you're drawing from one, make it pickable
+  const src = awaitingPick? nextActiveAfter(0) : -1;
+  [1,2].forEach(i=>{ const el=document.getElementById('h'+i);
+    if(i===src){ el.innerHTML=hands[i].map((_,k)=>`<div class="card back pick" data-k="${k}"></div>`).join(''); [...el.children].forEach(ch=>ch.onclick=()=>youDraw(+ch.dataset.k)); }
+    else el.innerHTML=hands[i].map(()=>'<div class="card back"></div>').join('');
+  });
+  ['sec0','sec1','sec2'].forEach((id,i)=>document.getElementById(id).classList.toggle('om-active',current===i&&!over));
+}
+function nextTurn(first){
+  if(over) return;
+  if(activeCount()<=1) return finish();
+  if(!first) current=nextActiveAfter(current);
+  if(current<0) return finish();
+  render();
+  if(current===0){ // your turn: pick from next active player
+    const src=nextActiveAfter(0);
+    awaitingPick=true;
+    setMsg('Your turn — draw a card from '+(src===1?'LEFT':'RIGHT')+' player.');
+    render();
+  } else {
+    busy=true; setMsg('🤖 '+(current===1?'Left':'Right')+' player is drawing…');
+    setTimeout(aiTurn,900);
+  }
+}
+function drawCard(drawer, source){
+  const k=0|Math.random()*hands[source].length;
+  return drawFrom(drawer,source,k);
+}
+function drawFrom(drawer,source,k){
+  const card=hands[source].splice(k,1)[0];
+  hands[drawer].push(card);
+  removePairs(hands[drawer]);
+  out=hands.map(h=>h.length===0);
+  return card;
+}
+function youDraw(k){
+  if(!awaitingPick||over) return;
+  awaitingPick=false;
+  const src=nextActiveAfter(0);
+  const before=hands[0].length;
+  const card=drawFrom(0,src,k);
+  const paired=hands[0].length<=before; // pair removed (length didn't grow by 1)
+  sfx(paired?'coin':'flip');
+  setMsg('You drew '+RANKS[card.r]+SUITS[card.s]+(paired?' — matched & discarded! ✓':'.'));
+  render();
+  if(activeCount()<=1) return setTimeout(finish,500);
+  setTimeout(()=>nextTurn(false),700);
+}
+function aiTurn(){
+  if(over) return;
+  const src=nextActiveAfter(current);
+  if(src<0){ busy=false; return finish(); }
+  const before=hands[current].length;
+  const card=drawCard(current,src);
+  const paired=hands[current].length<=before;
+  busy=false;
+  setMsg('🤖 '+(current===1?'Left':'Right')+' drew from '+(src===0?'YOU':(src===1?'Left':'Right'))+(paired?' and matched a pair.':'.'));
+  render();
+  if(activeCount()<=1) return setTimeout(finish,500);
+  setTimeout(()=>nextTurn(false),700);
+}
+function finish(){
+  if(over)return; over=true;
+  const loser=hands.findIndex(h=>h.length>0);
+  const names=['YOU','the LEFT player','the RIGHT player'];
+  const youLose=loser===0;
+  if(!youLose&&window.GH)GH.score.inc(GAME,'wins',1);
+  render();
+  document.getElementById('win-msg').textContent=youLose?'👵 OLD MAID!':'🎉 SAFE!';
+  document.getElementById('win-sub').textContent=youLose?'You got stuck with the Old Maid!':(names[loser].replace('the ','The '))+' is the Old Maid — you\'re safe!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400);
+}
+newGame();
+</script>
+</body>
+</html>

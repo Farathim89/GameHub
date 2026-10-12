@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stacker</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.st-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+#stacker{background:#0a0d16;border:2px solid var(--border);border-radius:10px;touch-action:manipulation;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.st-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+.st-drop{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;padding:14px 40px;border-radius:10px;border:3px solid var(--accent);color:var(--accent);background:var(--surface);cursor:pointer;letter-spacing:2px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🏗️ STACKER</span>
+  <div class="h-btns"><div class="info-pill">LEVEL: <span id="level">1</span></div><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="st-wrap">
+  <div class="st-hint">Tap / Space / the button to drop the moving row. Keep it aligned — overhangs fall off. Reach the top!</div>
+  <canvas id="stacker" width="300" height="480"></canvas>
+  <button class="st-drop" onclick="drop()">⬇ DROP</button>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 TOP!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='stacker';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('stacker'), ctx=cv.getContext('2d');
+const COLS=7, ROWS=15, CELL=cv.width/COLS;
+let stack, cur, width, pos, dir, speed, level, over, raf, best, tick;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+function newGame(){ stack=[]; level=0; width=3; over=false; speed=0.08; startRow(); document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; tick=0; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop); updateHud(); }
+function startRow(){ pos=0; dir=1; cur=Array.from({length:width}); }
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){ pos+=dir*speed*(1+level*0.07); if(pos<=0){pos=0;dir=1;} if(pos+width>=COLS){pos=COLS-width;dir=-1;} }
+function cols(){ const c=[]; const p=Math.round(pos); for(let i=0;i<width;i++)c.push(p+i); return c; }
+function drop(){
+  if(over)return;
+  const moving=cols();
+  if(level===0){ stack.push(moving); } else {
+    const below=stack[stack.length-1];
+    const kept=moving.filter(c=>below.includes(c));
+    if(kept.length===0){ return gameOver(false); }
+    width=kept.length; stack.push(kept);
+  }
+  sfx('place'); level++; updateHud();
+  if(level>=ROWS){ return gameOver(true); }
+  startRow();
+}
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // stacked rows from bottom
+  stack.forEach((row,i)=>{ const y=cv.height-(i+1)*CELL; row.forEach(c=>drawCell(c,y,'#40c0a0')); });
+  // moving row
+  const y=cv.height-(level+1)*CELL; cols().forEach(c=>drawCell(c,y,'#f0c040'));
+}
+function drawCell(c,y,color){ ctx.fillStyle=color; ctx.fillRect(c*CELL+1,y+1,CELL-2,CELL-2); ctx.fillStyle='rgba(255,255,255,.2)'; ctx.fillRect(c*CELL+1,y+1,CELL-2,4); }
+function updateHud(){ document.getElementById('level').textContent=level+1; document.getElementById('best').textContent=best; }
+function gameOver(won){ over=true; const r=window.GH?GH.score.best(GAME,'best',level,'high'):{value:level,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-msg').textContent=won?'🏆 YOU REACHED THE TOP!':'💥 TOPPLED';
+  document.getElementById('win-sub').textContent='Reached level '+level+(r.isBest&&level>0?' — NEW BEST! 🎉':''); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+cv.addEventListener('mousedown',e=>{e.preventDefault();drop();});
+cv.addEventListener('touchstart',e=>{e.preventDefault();drop();},{passive:false});
+document.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='ArrowDown'){drop();e.preventDefault();} });
+newGame();
+</script>
+</body>
+</html>

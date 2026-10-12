@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Noughts & Crosses</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
+<style>
+.nac-wrap{display:flex;flex-direction:column;align-items:center;padding:16px;gap:14px;flex:1;}
+
+/* MODE PICK */
+.mode-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:24px;padding:30px;}
+.mode-title{font-family:'Orbitron',monospace;font-size:clamp(22px,5vw,40px);font-weight:900;letter-spacing:4px;color:#34d399;text-align:center;}
+.mode-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
+
+/* BOARD */
+.nac-board{
+  display:grid;
+  gap:0;
+  background:#34d399;  /* grid lines = this color showing through */
+  border:4px solid #34d399;
+  border-radius:10px;
+  overflow:hidden;
+  box-shadow:0 0 30px rgba(52,211,153,.25);
+  flex-shrink:0;
+}
+
+/* CELL */
+.nac-cell{
+  display:flex;align-items:center;justify-content:center;
+  background:#0a0a0a;
+  cursor:pointer;
+  transition:background .12s;
+  position:relative;
+  font-family:'Nunito',sans-serif;
+  font-weight:900;
+  user-select:none;
+}
+.nac-cell:hover:not(.taken){background:#0f1f14;}
+
+/* Symbols */
+.nac-cell .x-sym{
+  color:#5599ff;
+  font-size:inherit;
+  line-height:1;
+  text-shadow:0 0 12px rgba(85,153,255,.5);
+  transition:transform .1s;
+}
+.nac-cell .o-sym{
+  color:#ff6666;
+  font-size:inherit;
+  line-height:1;
+  text-shadow:0 0 12px rgba(255,102,102,.5);
+}
+
+/* Winning cell highlight */
+.nac-cell.win-cell{
+  background:#0f2a18!important;
+  animation:cellpulse .6s infinite alternate;
+}
+@keyframes cellpulse{from{background:#0f2a18}to{background:#1a4028}}
+
+/* TURN INDICATOR */
+.turn-pill{
+  font-family:'Orbitron',monospace;font-size:16px;font-weight:700;
+  padding:9px 22px;border-radius:8px;border:2px solid;letter-spacing:2px;
+  transition:all .3s;
+}
+
+/* SCORE */
+.score-bar{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;}
+.score-box{
+  font-family:'Orbitron',monospace;font-size:15px;font-weight:700;
+  padding:8px 18px;border-radius:8px;border:2px solid;letter-spacing:2px;
+  min-width:80px;text-align:center;
+}
+
+/* SIZE PILLS */
+.size-row{display:flex;gap:8px;justify-content:center;}
+.spill{
+  font-family:'Orbitron',monospace;font-size:11px;font-weight:700;
+  padding:5px 14px;border-radius:20px;border:2px solid #1a3a1a;
+  cursor:pointer;background:#0a1a0a;color:#2a5a2a;letter-spacing:1px;
+  transition:all .15s;
+}
+.spill:hover{border-color:#34d399;color:#34d399;}
+.spill.active{border-color:#34d399;color:#34d399;background:#0f2a14;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#34d399">✕ NOUGHTS & CROSSES</span>
+  <div class="h-btns">
+    <span class="info-pill" id="mode-label">VS AI</span>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+    <button class="hbtn" onclick="showModePick()">CHANGE MODE</button>
+  </div>
+</div>
+
+<!-- MODE PICK -->
+<div id="mode-pick" class="mode-wrap">
+  <div class="mode-title">NOUGHTS &amp; CROSSES</div>
+
+  <div>
+    <div style="font-family:'Orbitron',monospace;font-size:10px;color:#2a5a2a;letter-spacing:2px;text-align:center;margin-bottom:8px;">BOARD SIZE</div>
+    <div class="size-row">
+      <button class="spill active" id="sz3" onclick="setSize(3)">3×3</button>
+      <button class="spill" id="sz5" onclick="setSize(5)">5×5 (need 4)</button>
+      <button class="spill" id="sz7" onclick="setSize(7)">7×7 (need 4)</button>
+    </div>
+  </div>
+
+  <div class="mode-btns">
+    <button class="mbtn blue" onclick="startMode('2p')">👥 2 PLAYERS</button>
+    <button class="mbtn green" onclick="startMode('ai-easy')">🤖 AI (Easy)</button>
+    <button class="mbtn accent" onclick="startMode('ai-hard')">🤖 AI (Hard)</button>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="nac-game" style="display:none;">
+  <div class="nac-wrap">
+    <div class="score-bar">
+      <div class="score-box" id="score-x" style="color:#5599ff;border-color:#5599ff;">✕  <span id="sc-x">0</span></div>
+      <div class="score-box" style="color:#555;border-color:#222;">DRAW <span id="sc-d">0</span></div>
+      <div class="score-box" id="score-o" style="color:#ff6666;border-color:#ff6666;">○  <span id="sc-o">0</span></div>
+    </div>
+
+    <div class="turn-pill" id="turn-pill">✕ PLAYER 1'S TURN</div>
+
+    <div class="nac-board" id="nac-board"></div>
+
+    <div style="font-family:'Orbitron',monospace;font-size:10px;color:#1a3a1a;letter-spacing:1px;">
+      DOUBLE-CLICK or tap any empty cell to place
+    </div>
+  </div>
+</div>
+
+<!-- WIN OVERLAY -->
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="showModePick()">CHANGE MODE</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let SIZE = 3;          // board dimension
+let WIN_LEN = 3;       // consecutive to win
+let board = [];        // 0=empty, 1=X, 2=O
+let currentTurn = 1;   // 1=X, 2=O
+let gameMode = 'ai-hard';
+let gameOver = false;
+let scores = { x: 0, o: 0, d: 0 };
+let aiThinking = false;
+
+function setSize(n) {
+  SIZE = n;
+  WIN_LEN = n === 3 ? 3 : 4; // 5x5 and 7x7 need 4 in a row
+  document.querySelectorAll('.spill').forEach(b => b.classList.remove('active'));
+  document.getElementById('sz' + n).classList.add('active');
+}
+
+function showModePick() {
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('nac-game').style.display = 'none';
+  document.getElementById('mode-pick').style.display = 'flex';
+}
+
+function startMode(mode) {
+  gameMode = mode;
+  document.getElementById('mode-pick').style.display = 'none';
+  document.getElementById('nac-game').style.display = 'block';
+  const label = mode === '2p' ? '2 PLAYERS' : mode === 'ai-easy' ? 'VS AI (Easy)' : 'VS AI (Hard)';
+  document.getElementById('mode-label').textContent = label;
+  scores = { x: 0, o: 0, d: 0 };
+  updateScores();
+  newGame();
+}
+
+function newGame() {
+  document.getElementById('win-overlay').classList.remove('show');
+  board = Array(SIZE * SIZE).fill(0);
+  currentTurn = 1;
+  gameOver = false;
+  aiThinking = false;
+  buildBoard();
+  updateTurnPill();
+}
+
+// ═══════════════════════════════════════════════
+// BUILD BOARD DOM
+// ═══════════════════════════════════════════════
+function buildBoard() {
+  const el = document.getElementById('nac-board');
+  // Cell size: fit both width AND height
+  const overhead = 220; // header + score bar + size row + padding
+  const maxW = Math.min(window.innerWidth - 32, 560);
+  const maxH = window.innerHeight - overhead;
+  const maxBoard = Math.min(maxW, maxH);
+  const gap = 3;
+  const cellPx = Math.floor((maxBoard - gap * (SIZE - 1)) / SIZE);
+  const fontSize = Math.floor(cellPx * 0.55);
+
+  el.style.gridTemplateColumns = `repeat(${SIZE}, ${cellPx}px)`;
+  el.style.gridTemplateRows = `repeat(${SIZE}, ${cellPx}px)`;
+  el.style.gap = gap + 'px';
+  el.innerHTML = '';
+
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'nac-cell';
+    cell.style.fontSize = fontSize + 'px';
+    cell.dataset.i = i;
+
+    const val = board[i];
+    if (val === 1) {
+      cell.classList.add('taken');
+      cell.innerHTML = `<span class="x-sym">✕</span>`;
+    } else if (val === 2) {
+      cell.classList.add('taken');
+      cell.innerHTML = `<span class="o-sym">○</span>`;
+    } else {
+      cell.addEventListener('click', () => handleClick(i));
+    }
+    el.appendChild(cell);
+  }
+}
+
+function renderBoard(winLine = []) {
+  const cells = document.getElementById('nac-board').children;
+  const overhead = 220;
+  const maxW = Math.min(window.innerWidth - 32, 560);
+  const maxH = window.innerHeight - overhead;
+  const maxBoard = Math.min(maxW, maxH);
+  const gap = 3;
+  const cellPx = Math.floor((maxBoard - gap * (SIZE - 1)) / SIZE);
+  const fontSize = Math.floor(cellPx * 0.55);
+
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const cell = cells[i];
+    cell.className = 'nac-cell';
+    cell.style.fontSize = fontSize + 'px';
+    cell.innerHTML = '';
+    cell.onclick = null;
+
+    if (winLine.includes(i)) cell.classList.add('win-cell');
+
+    const val = board[i];
+    if (val === 1) {
+      cell.classList.add('taken');
+      cell.innerHTML = `<span class="x-sym">✕</span>`;
+    } else if (val === 2) {
+      cell.classList.add('taken');
+      cell.innerHTML = `<span class="o-sym">○</span>`;
+    } else if (!gameOver) {
+      cell.addEventListener('click', () => handleClick(i));
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// GAME LOGIC
+// ═══════════════════════════════════════════════
+function handleClick(i) {
+  if (gameOver || aiThinking) return;
+  if (board[i] !== 0) return;
+  // In AI mode, only let human (X=1) click
+  if (gameMode !== '2p' && currentTurn === 2) return;
+
+  placeMove(i);
+}
+
+function placeMove(i) {
+  board[i] = currentTurn;
+  const winLine = checkWin(currentTurn);
+
+  if (winLine) {
+    gameOver = true;
+    renderBoard(winLine);
+    const isX = currentTurn === 1;
+    if (isX) scores.x++; else scores.o++;
+    updateScores();
+    const winner = isX ? (gameMode === '2p' ? '✕ PLAYER 1 WINS!' : '🏆 YOU WIN!') :
+                         (gameMode === '2p' ? '○ PLAYER 2 WINS!' : '🤖 AI WINS!');
+    setTimeout(() => {
+      document.getElementById('win-msg').textContent = winner;
+      document.getElementById('win-sub').textContent = `${WIN_LEN} in a row!`;
+      document.getElementById('win-overlay').classList.add('show');
+    }, 350);
+    return;
+  }
+
+  if (board.every(v => v !== 0)) {
+    gameOver = true;
+    renderBoard();
+    scores.d++;
+    updateScores();
+    setTimeout(() => {
+      document.getElementById('win-msg').textContent = '🤝 DRAW!';
+      document.getElementById('win-sub').textContent = 'No moves left';
+      document.getElementById('win-overlay').classList.add('show');
+    }, 300);
+    return;
+  }
+
+  currentTurn = 3 - currentTurn; // toggle 1↔2
+  renderBoard();
+  updateTurnPill();
+
+  if (gameMode !== '2p' && currentTurn === 2) {
+    aiThinking = true;
+    setTimeout(doAI, gameMode === 'ai-easy' ? 200 : 400);
+  }
+}
+
+function checkWin(player) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      if (board[r * SIZE + c] !== player) continue;
+      for (const [dr, dc] of dirs) {
+        const line = [r * SIZE + c];
+        for (let k = 1; k < WIN_LEN; k++) {
+          const nr = r + dr * k, nc = c + dc * k;
+          if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) break;
+          if (board[nr * SIZE + nc] !== player) break;
+          line.push(nr * SIZE + nc);
+        }
+        if (line.length === WIN_LEN) return line;
+      }
+    }
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════
+// AI
+// ═══════════════════════════════════════════════
+function doAI() {
+  if (gameOver) { aiThinking = false; return; }
+  const move = gameMode === 'ai-easy' ? aiEasy() : aiBest();
+  aiThinking = false;
+  if (move >= 0) placeMove(move);
+}
+
+function aiEasy() {
+  // Win if possible, block if needed, else random
+  const win = findBest(2); if (win >= 0) return win;
+  const block = findBest(1); if (block >= 0) return block;
+  const empty = board.map((v,i)=>v===0?i:-1).filter(i=>i>=0);
+  return empty[Math.floor(Math.random() * empty.length)] ?? -1;
+}
+
+function findBest(player) {
+  const empty = board.map((v,i) => v===0?i:-1).filter(i=>i>=0);
+  for (const i of empty) {
+    board[i] = player;
+    const win = checkWin(player);
+    board[i] = 0;
+    if (win) return i;
+  }
+  return -1;
+}
+
+function aiBest() {
+  // For 3x3: full minimax. For larger: minimax with depth limit
+  const maxDepth = SIZE === 3 ? 9 : SIZE === 5 ? 4 : 3;
+  let bestScore = -Infinity, bestMove = -1;
+  const empty = board.map((v,i) => v===0?i:-1).filter(i=>i>=0);
+  // Shuffle for variety at equal scores
+  for (let i = empty.length-1; i > 0; i--) { const j=0|Math.random()*(i+1); [empty[i],empty[j]]=[empty[j],empty[i]]; }
+
+  for (const i of empty) {
+    board[i] = 2;
+    const score = minimax(maxDepth - 1, false, -Infinity, Infinity);
+    board[i] = 0;
+    if (score > bestScore) { bestScore = score; bestMove = i; }
+  }
+  return bestMove;
+}
+
+function minimax(depth, isMax, alpha, beta) {
+  if (checkWin(2)) return 100 + depth;
+  if (checkWin(1)) return -100 - depth;
+  const empty = board.map((v,i) => v===0?i:-1).filter(i=>i>=0);
+  if (!empty.length || depth === 0) return evalBoard();
+
+  if (isMax) {
+    let best = -Infinity;
+    for (const i of empty) {
+      board[i] = 2;
+      best = Math.max(best, minimax(depth-1, false, alpha, beta));
+      board[i] = 0;
+      alpha = Math.max(alpha, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const i of empty) {
+      board[i] = 1;
+      best = Math.min(best, minimax(depth-1, true, alpha, beta));
+      board[i] = 0;
+      beta = Math.min(beta, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+}
+
+function evalBoard() {
+  // Heuristic for larger boards: count threats
+  let score = 0;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      for (const [dr,dc] of dirs) {
+        let ai=0, human=0;
+        for (let k = 0; k < WIN_LEN; k++) {
+          const nr=r+dr*k, nc=c+dc*k;
+          if (nr<0||nr>=SIZE||nc<0||nc>=SIZE) { ai=-999; human=-999; break; }
+          const v = board[nr*SIZE+nc];
+          if (v===2) ai++; else if (v===1) human++;
+        }
+        if (human===0&&ai>0) score += ai*ai;
+        if (ai===0&&human>0) score -= human*human;
+      }
+    }
+  }
+  // Center bonus
+  const mid = Math.floor(SIZE/2);
+  if (board[mid*SIZE+mid]===2) score+=3;
+  if (board[mid*SIZE+mid]===1) score-=3;
+  return score;
+}
+
+// ═══════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════
+function updateTurnPill() {
+  const el = document.getElementById('turn-pill');
+  if (currentTurn === 1) {
+    el.textContent = gameMode === '2p' ? '✕ PLAYER 1\'S TURN' : '✕ YOUR TURN';
+    el.style.color = '#5599ff'; el.style.borderColor = '#5599ff';
+  } else {
+    el.textContent = gameMode === '2p' ? '○ PLAYER 2\'S TURN' : '🤖 AI\'S TURN';
+    el.style.color = '#ff6666'; el.style.borderColor = '#ff6666';
+  }
+}
+
+function updateScores() {
+  document.getElementById('sc-x').textContent = scores.x;
+  document.getElementById('sc-o').textContent = scores.o;
+  document.getElementById('sc-d').textContent = scores.d;
+}
+
+// Start on mode pick
+document.getElementById('mode-pick').style.display = 'flex';
+document.getElementById('nac-game').style.display = 'none';
+</script>
+</body>
+</html>

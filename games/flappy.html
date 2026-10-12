@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flappy</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.fl-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 10px;}
+#flappy{background:linear-gradient(180deg,#1a2a4a,#0a1428);border:2px solid var(--border);border-radius:12px;max-width:100%;touch-action:none;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.fl-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🐤 FLAPPY</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="fl-wrap">
+  <div class="fl-hint">Tap / click / Space to flap. Fly through the gaps!</div>
+  <canvas id="flappy" width="460" height="520"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='flappy';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('flappy'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, GAP=140, PIPE_W=60, SPEED=2.4, GRAV=0.45, FLAP=-7.6;
+let bird, pipes, score, best, state, raf, spawnT;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  document.getElementById('win-overlay').classList.remove('show');
+  bird={x:110,y:H/2,vy:0,r:13};
+  pipes=[]; score=0; spawnT=0; state='ready';
+  document.getElementById('score').textContent=0;
+  document.getElementById('best').textContent=best;
+  cancelAnimationFrame(raf); loop();
+}
+function addPipe(){ const margin=60; const gapY=margin+Math.random()*(H-GAP-margin*2); pipes.push({x:W,gapY,passed:false}); }
+function flap(){ if(state==='over')return; if(state==='ready'){state='play';} bird.vy=FLAP; sfx('flip'); }
+
+function loop(){ update(); draw(); if(state!=='over') raf=requestAnimationFrame(loop); }
+function update(){
+  if(state!=='play') return;
+  bird.vy+=GRAV; bird.y+=bird.vy;
+  spawnT++;
+  if(spawnT> (210/SPEED)){ spawnT=0; addPipe(); }
+  for(const p of pipes){ p.x-=SPEED;
+    if(!p.passed && p.x+PIPE_W<bird.x){ p.passed=true; score++; sfx('coin'); document.getElementById('score').textContent=score; }
+  }
+  pipes=pipes.filter(p=>p.x+PIPE_W>-10);
+  // collisions
+  if(bird.y+bird.r>H-4 || bird.y-bird.r<0){ return over(); }
+  for(const p of pipes){
+    if(bird.x+bird.r>p.x && bird.x-bird.r<p.x+PIPE_W){
+      if(bird.y-bird.r<p.gapY || bird.y+bird.r>p.gapY+GAP){ return over(); }
+    }
+  }
+}
+function over(){
+  state='over'; sfx('lose');
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Score '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // pipes
+  for(const p of pipes){
+    ctx.fillStyle='#40c060';
+    ctx.fillRect(p.x,0,PIPE_W,p.gapY);
+    ctx.fillRect(p.x,p.gapY+GAP,PIPE_W,H-(p.gapY+GAP));
+    ctx.fillStyle='#2e9048';
+    ctx.fillRect(p.x-3,p.gapY-18,PIPE_W+6,18);
+    ctx.fillRect(p.x-3,p.gapY+GAP,PIPE_W+6,18);
+  }
+  // ground
+  ctx.fillStyle='#3a2a16'; ctx.fillRect(0,H-4,W,4);
+  // bird
+  ctx.save(); ctx.translate(bird.x,bird.y); ctx.rotate(Math.max(-0.4,Math.min(1.2,bird.vy/12)));
+  ctx.fillStyle='#f0c040'; ctx.beginPath(); ctx.arc(0,0,bird.r,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(5,-4,3.5,0,7); ctx.fill();
+  ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(6,-4,1.6,0,7); ctx.fill();
+  ctx.fillStyle='#e07020'; ctx.beginPath(); ctx.moveTo(bird.r-2,0);ctx.lineTo(bird.r+7,-3);ctx.lineTo(bird.r+7,3);ctx.closePath(); ctx.fill();
+  ctx.restore();
+  if(state==='ready'){ ctx.fillStyle='rgba(255,255,255,.85)'; ctx.font='16px Orbitron,monospace'; ctx.textAlign='center'; ctx.fillText('TAP TO START',W/2,H/2-40); }
+}
+cv.addEventListener('mousedown',e=>{e.preventDefault();flap();});
+cv.addEventListener('touchstart',e=>{e.preventDefault();flap();},{passive:false});
+document.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();flap();} });
+newGame();
+</script>
+</body>
+</html>

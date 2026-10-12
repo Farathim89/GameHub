@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Futoshiki</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<script src="../themes/themes.js" defer></script><link rel="stylesheet" href="../themes/themes.css">
+<script src="../lang/lang.js" defer></script>
+<style>
+.ft-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.ft-board{display:grid;background:var(--surface);padding:12px;border-radius:12px;border:2px solid var(--border);}
+.ft-cell{display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;background:var(--surface2);border-radius:6px;cursor:pointer;}
+.ft-cell.given{color:var(--accent);cursor:default;box-shadow:inset 0 0 0 2px rgba(240,192,64,.3);}
+.ft-cell.err{outline:2px solid var(--red);}
+.ft-op{display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:700;color:#e08040;font-size:18px;}
+.ft-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">⟨⟩ FUTOSHIKI</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()"><option value="4" selected>4×4</option><option value="5">5×5</option><option value="6">6×6</option></select>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ft-wrap">
+  <div class="ft-hint">Fill each row &amp; column with 1–N (no repeats) while obeying all the <b>&lt;</b> / <b>&gt;</b> signs. Tap a cell to cycle its value.</div>
+  <div id="board" class="ft-board"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='futoshiki';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let N=4, sol=[], grid=[], given=[], hRel=[], vRel=[], over=false;
+// hRel[r][c] = relation between (r,c) and (r,c+1): 1 = left<right, -1 = left>right, 0 none
+// vRel[r][c] = between (r,c) and (r+1,c): 1 = top<bottom, -1 top>bottom, 0 none
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10); over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  sol=genLatin();
+  // relations: reveal a fraction of adjacencies
+  hRel=Array.from({length:N},()=>Array(N-1).fill(0));
+  vRel=Array.from({length:N-1},()=>Array(N).fill(0));
+  const relProb=0.4;
+  for(let r=0;r<N;r++)for(let c=0;c<N-1;c++) if(Math.random()<relProb) hRel[r][c]=sol[r][c]<sol[r][c+1]?1:-1;
+  for(let r=0;r<N-1;r++)for(let c=0;c<N;c++) if(Math.random()<relProb) vRel[r][c]=sol[r][c]<sol[r+1][c]?1:-1;
+  // givens
+  grid=Array.from({length:N},()=>Array(N).fill(0)); given=Array.from({length:N},()=>Array(N).fill(false));
+  const reveal=Math.round(N*N*0.25);
+  const cells=[]; for(let r=0;r<N;r++)for(let c=0;c<N;c++)cells.push([r,c]); shuffle(cells);
+  for(let i=0;i<reveal;i++){ const [r,c]=cells[i]; grid[r][c]=sol[r][c]; given[r][c]=true; }
+  render();
+}
+function genLatin(){
+  const base=Array.from({length:N},(_,r)=>Array.from({length:N},(_,c)=>((r+c)%N)+1));
+  const rp=[...Array(N).keys()]; shuffle(rp); const vp=[...Array(N).keys()].map(x=>x+1); shuffle(vp);
+  // only shuffle rows + relabel to keep it a valid latin square
+  const M=Array.from({length:N},()=>Array(N).fill(0));
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++) M[r][c]=vp[base[rp[r]][c]-1];
+  return M;
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function cycle(r,c){ if(over||given[r][c])return; grid[r][c]=(grid[r][c]+1)%(N+1); sfx('select'); render(); if(checkWin())win(); }
+function relErrors(){
+  const bad=new Set();
+  for(let r=0;r<N;r++)for(let c=0;c<N-1;c++){ if(hRel[r][c]&&grid[r][c]&&grid[r][c+1]){ const ok=hRel[r][c]===1?grid[r][c]<grid[r][c+1]:grid[r][c]>grid[r][c+1]; if(!ok){bad.add(r+','+c);bad.add(r+','+(c+1));} } }
+  for(let r=0;r<N-1;r++)for(let c=0;c<N;c++){ if(vRel[r][c]&&grid[r][c]&&grid[r+1][c]){ const ok=vRel[r][c]===1?grid[r][c]<grid[r+1][c]:grid[r][c]>grid[r+1][c]; if(!ok){bad.add(r+','+c);bad.add((r+1)+','+c);} } }
+  // dup in row/col
+  for(let r=0;r<N;r++){ const seen={}; for(let c=0;c<N;c++){ const v=grid[r][c]; if(v){ if(seen[v]!==undefined){bad.add(r+','+c);bad.add(r+','+seen[v]);} seen[v]=c; } } }
+  for(let c=0;c<N;c++){ const seen={}; for(let r=0;r<N;r++){ const v=grid[r][c]; if(v){ if(seen[v]!==undefined){bad.add(r+','+c);bad.add(seen[v]+','+c);} seen[v]=r; } } }
+  return bad;
+}
+function checkWin(){ for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(grid[r][c]===0)return false; return relErrors().size===0; }
+function render(){
+  const b=document.getElementById('board'); if(!b)return;
+  const avail=Math.min(window.innerWidth-40,420); const cell=Math.floor((avail-24)/(N+0.4*(N-1))); const gap=Math.round(cell*0.4);
+  // grid template: cells and operator gaps interleaved
+  b.style.gridTemplateColumns=`repeat(${N}, ${cell}px ${gap}px)`.replace(new RegExp(' '+gap+'px$'),'');
+  // simpler: build with cells + op spacers
+  b.style.gridTemplateColumns=Array(N).fill(cell+'px').join(' '+gap+'px ');
+  b.style.gridTemplateRows=Array(N).fill(cell+'px').join(' '+gap+'px ');
+  b.innerHTML='';
+  const bad=relErrors();
+  for(let r=0;r<N;r++){
+    for(let c=0;c<N;c++){
+      const d=document.createElement('div'); d.className='ft-cell'+(given[r][c]?' given':'')+(bad.has(r+','+c)?' err':'');
+      d.style.width=cell+'px'; d.style.height=cell+'px'; d.style.fontSize=(cell*0.5)+'px';
+      d.textContent=grid[r][c]||''; if(!given[r][c])d.onclick=()=>cycle(r,c);
+      d.style.gridRow=(r*2+1); d.style.gridColumn=(c*2+1); b.appendChild(d);
+      if(c<N-1&&hRel[r][c]){ const op=document.createElement('div'); op.className='ft-op'; op.textContent=hRel[r][c]===1?'<':'>'; op.style.gridRow=(r*2+1); op.style.gridColumn=(c*2+2); b.appendChild(op); }
+    }
+    if(r<N-1) for(let c=0;c<N;c++){ if(vRel[r][c]){ const op=document.createElement('div'); op.className='ft-op'; op.textContent=vRel[r][c]===1?'∧':'∨'; op.style.gridRow=(r*2+2); op.style.gridColumn=(c*2+1); b.appendChild(op); } }
+  }
+}
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='All constraints satisfied! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+window.addEventListener('resize',()=>{ if(sol.length) render(); });
+newGame();
+</script>
+</body>
+</html>

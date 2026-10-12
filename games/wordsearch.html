@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Word Search</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.wsr-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+.wsr-grid{display:grid;gap:2px;background:var(--surface);padding:8px;border-radius:10px;border:2px solid var(--border);user-select:none;touch-action:none;}
+.wsr-cell{display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:700;border-radius:4px;background:var(--surface2);cursor:pointer;transition:background .08s;}
+.wsr-cell.sel{background:var(--accent);color:#111;}
+.wsr-cell.found{background:rgba(64,192,160,.5);color:#fff;}
+.wsr-words{display:flex;gap:8px 16px;flex-wrap:wrap;justify-content:center;max-width:520px;}
+.wsr-word{font-family:'Orbitron',monospace;font-size:13px;letter-spacing:1px;padding:4px 8px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);}
+.wsr-word.done{text-decoration:line-through;color:var(--green);border-color:var(--green);}
+.wsr-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🔎 WORD SEARCH</span>
+  <div class="h-btns">
+    <select id="theme-sel" onchange="newGame()"></select>
+    <div class="info-pill">FOUND: <span id="found">0</span>/<span id="total">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="wsr-wrap">
+  <div class="wsr-hint">Click the first and last letter of a word (any direction). Find them all!</div>
+  <div id="grid" class="wsr-grid"></div>
+  <div id="words" class="wsr-words"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 ALL FOUND!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='wordsearch';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const THEMES={
+  ANIMALS:['TIGER','PANDA','ZEBRA','OTTER','MOOSE','KOALA','HORSE','WHALE'],
+  FRUITS:['APPLE','MANGO','LEMON','GRAPE','PEACH','MELON','BERRY','OLIVE'],
+  SPACE:['COMET','ORBIT','MOON','MARS','STAR','SOLAR','VENUS','PLUTO'],
+  COLORS:['GREEN','AMBER','CORAL','IVORY','OLIVE','LILAC','BEIGE','CYAN']
+};
+const DIRS=[[0,1],[1,0],[1,1],[1,-1],[0,-1],[-1,0],[-1,-1],[-1,1]];
+let N=12, grid=[], words=[], found=[], first=null, cellPx=0;
+
+function newGame(){
+  const sel=document.getElementById('theme-sel');
+  if(!sel.options.length){ Object.keys(THEMES).forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o);}); }
+  const theme=sel.value||'ANIMALS';
+  words=THEMES[theme].slice(); found=[]; first=null;
+  N=Math.max(11, Math.max(...words.map(w=>w.length))+2);
+  document.getElementById('win-overlay').classList.remove('show');
+  build();
+  render();
+  document.getElementById('total').textContent=words.length;
+  document.getElementById('found').textContent=0;
+}
+function build(){
+  for(let attempt=0;attempt<200;attempt++){
+    grid=Array.from({length:N},()=>Array(N).fill(''));
+    let ok=true;
+    for(const w of words){ if(!placeWord(w)){ ok=false; break; } }
+    if(ok){ // fill blanks
+      for(let r=0;r<N;r++)for(let c=0;c<N;c++) if(!grid[r][c]) grid[r][c]=String.fromCharCode(65+(0|Math.random()*26));
+      return;
+    }
+  }
+}
+function placeWord(w){
+  for(let tries=0;tries<120;tries++){
+    const [dr,dc]=DIRS[0|Math.random()*DIRS.length];
+    const r0=0|Math.random()*N, c0=0|Math.random()*N;
+    const endR=r0+dr*(w.length-1), endC=c0+dc*(w.length-1);
+    if(endR<0||endR>=N||endC<0||endC>=N) continue;
+    let fits=true;
+    for(let k=0;k<w.length;k++){ const ch=grid[r0+dr*k][c0+dc*k]; if(ch&&ch!==w[k]){ fits=false; break; } }
+    if(!fits) continue;
+    for(let k=0;k<w.length;k++) grid[r0+dr*k][c0+dc*k]=w[k];
+    return true;
+  }
+  return false;
+}
+function render(){
+  const g=document.getElementById('grid'); if(!g)return;
+  cellPx=Math.floor(Math.min(window.innerWidth-40,460)/N);
+  g.style.gridTemplateColumns=`repeat(${N},${cellPx}px)`;
+  g.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div'); d.className='wsr-cell'; d.dataset.r=r; d.dataset.c=c;
+    d.style.width=cellPx+'px'; d.style.height=cellPx+'px'; d.style.fontSize=Math.max(11,cellPx*0.5)+'px';
+    d.textContent=grid[r][c];
+    d.onclick=()=>clickCell(r,c);
+    g.appendChild(d);
+  }
+  markFound();
+  const wl=document.getElementById('words'); wl.innerHTML='';
+  words.forEach(w=>{ const s=document.createElement('span'); s.className='wsr-word'+(found.includes(w)?' done':''); s.textContent=w; wl.appendChild(s); });
+}
+function cellAt(r,c){ return document.querySelector('.wsr-cell[data-r="'+r+'"][data-c="'+c+'"]'); }
+function clickCell(r,c){
+  if(!first){ first=[r,c]; cellAt(r,c).classList.add('sel'); return; }
+  const [r0,c0]=first;
+  clearSel();
+  if(r0===r&&c0===c){ first=null; return; }
+  const dr=Math.sign(r-r0), dc=Math.sign(c-c0);
+  const len=Math.max(Math.abs(r-r0),Math.abs(c-c0))+1;
+  // must be straight line (h/v/diag)
+  if(!((r0===r)||(c0===c)||(Math.abs(r-r0)===Math.abs(c-c0)))){ first=null; sfx('error'); return; }
+  let str='';
+  for(let k=0;k<len;k++){ str+=grid[r0+dr*k][c0+dc*k]; }
+  const rev=str.split('').reverse().join('');
+  const match = words.find(w=>(w===str||w===rev)&&!found.includes(w));
+  if(match){
+    found.push(match); sfx('pop');
+    for(let k=0;k<len;k++){ cellAt(r0+dr*k,c0+dc*k).classList.add('found'); }
+    document.getElementById('found').textContent=found.length;
+    render();
+    if(found.length===words.length) win();
+  } else sfx('error');
+  first=null;
+}
+function clearSel(){ document.querySelectorAll('.wsr-cell.sel').forEach(e=>e.classList.remove('sel')); }
+function markFound(){ /* re-apply found highlight handled by re-locating words; simplest: skip, handled on find */ }
+function win(){
+  const r=window.GH?GH.score.inc(GAME,'wins',1):0;
+  document.getElementById('win-sub').textContent='All '+words.length+' words found!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+window.addEventListener('resize',()=>{ if(grid.length) render(); });
+newGame();
+</script>
+</body>
+</html>

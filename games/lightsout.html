@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lights Out</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.lo-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 12px;}
+.lo-info{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.lo-grid{display:grid;gap:8px;background:var(--surface);padding:12px;border-radius:14px;border:2px solid var(--border);touch-action:manipulation;}
+.lo-cell{
+  width:100%;aspect-ratio:1/1;border-radius:10px;cursor:pointer;
+  border:2px solid var(--border);transition:background .12s,box-shadow .12s,transform .08s;
+  background:var(--surface2);
+}
+.lo-cell:hover{transform:scale(1.04);}
+.lo-cell.on{
+  background:radial-gradient(circle at 35% 30%,#ffe890,#f0c040 70%);
+  border-color:#fff3c0;box-shadow:0 0 16px rgba(240,192,64,.65),inset 0 0 8px rgba(255,255,255,.4);
+}
+.lo-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;max-width:420px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">💡 LIGHTS OUT</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()">
+      <option value="3">3×3</option>
+      <option value="5" selected>5×5</option>
+      <option value="7">7×7</option>
+    </select>
+    <div class="info-pill">MOVES: <span id="moves">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+
+<div class="lo-wrap">
+  <div class="lo-hint">Tap a light to flip it and its 4 neighbours.<br>Turn <b style="color:var(--accent)">every light off</b> to win.</div>
+  <div id="grid" class="lo-grid"></div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💡 LIGHTS OUT!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+let N=5, grid=[], moves=0, solved=false;
+
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  document.getElementById('win-overlay').classList.remove('show');
+  grid=Array.from({length:N},()=>Array(N).fill(false));
+  // Scramble by applying random presses → always solvable
+  let presses=N*N;
+  for(let k=0;k<presses;k++){
+    const r=0|Math.random()*N, c=0|Math.random()*N;
+    flip(r,c);
+  }
+  // Guarantee it isn't already solved
+  if(isSolved()) flip(0|Math.random()*N,0|Math.random()*N);
+  moves=0; solved=false;
+  render();
+}
+
+function flip(r,c){
+  const t=(rr,cc)=>{ if(rr>=0&&rr<N&&cc>=0&&cc<N) grid[rr][cc]=!grid[rr][cc]; };
+  t(r,c); t(r-1,c); t(r+1,c); t(r,c-1); t(r,c+1);
+}
+
+function isSolved(){ return grid.every(row=>row.every(v=>!v)); }
+
+function press(r,c){
+  if(solved) return;
+  flip(r,c);
+  moves++;
+  render();
+  if(isSolved()){
+    solved=true;
+    document.getElementById('win-sub').textContent='Solved in '+moves+' move'+(moves===1?'':'s')+'!';
+    setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+  }
+}
+
+function render(){
+  const g=document.getElementById('grid');
+  if(!g) return;
+  const cell=Math.min(72, Math.floor((Math.min(window.innerWidth-60,460))/N)-8);
+  g.style.gridTemplateColumns=`repeat(${N},${cell}px)`;
+  g.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div');
+    d.className='lo-cell'+(grid[r][c]?' on':'');
+    d.style.width=cell+'px';
+    d.onclick=()=>press(r,c);
+    g.appendChild(d);
+  }
+  document.getElementById('moves').textContent=moves;
+}
+
+window.addEventListener('resize',()=>{ if(grid.length) render(); });
+newGame();
+</script>
+</body>
+</html>

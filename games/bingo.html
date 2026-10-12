@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bingo</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.bg-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.bg-top{display:flex;gap:20px;align-items:center;flex-wrap:wrap;justify-content:center;}
+.bg-call{text-align:center;font-family:'Orbitron',monospace;}
+.bg-ball{width:76px;height:76px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#f0c040);color:#222;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;margin:0 auto 4px;box-shadow:0 4px 12px rgba(0,0,0,.4);}
+.bg-recent{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);max-width:200px;}
+.bg-cards{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;}
+.bg-card{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.bg-lbl{font-family:'Orbitron',monospace;font-size:12px;letter-spacing:2px;}
+.bg-head{display:grid;grid-template-columns:repeat(5,42px);gap:3px;font-family:'Orbitron',monospace;font-weight:900;text-align:center;color:var(--accent);}
+.bg-grid{display:grid;grid-template-columns:repeat(5,42px);gap:3px;}
+.bg-c{height:42px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-size:14px;font-weight:700;border-radius:6px;background:var(--surface);border:2px solid var(--border);cursor:pointer;}
+.bg-c.free{background:#3a2a50;color:#f0c040}
+.bg-c.marked{background:var(--green);color:#071407;border-color:var(--green);}
+.bg-c.ai{cursor:default}
+.bg-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;letter-spacing:1px;}
+.bg-b{font-family:'Orbitron',monospace;font-size:15px;font-weight:800;padding:12px 32px;border-radius:10px;border:3px solid var(--green);background:var(--green);color:#0a140a;cursor:pointer;letter-spacing:1px;}
+.bg-b:disabled{opacity:.5;cursor:default}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🎟️ BINGO</span>
+  <div class="h-btns"><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="bg-wrap">
+  <div class="bg-top">
+    <div class="bg-call"><div class="bg-ball" id="ball">—</div><div style="font-size:11px;color:var(--dim)">CALLED <span id="count">0</span>/75</div></div>
+    <button class="bg-b" id="draw" onclick="drawBall()">🎱 CALL NEXT</button>
+    <div class="bg-recent" id="recent"></div>
+  </div>
+  <div class="bg-msg" id="msg">Click your matching numbers as they're called!</div>
+  <div class="bg-cards">
+    <div class="bg-card"><div class="bg-lbl" style="color:#f0c040">YOUR CARD</div><div class="bg-head"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div><div class="bg-grid" id="you"></div></div>
+    <div class="bg-card"><div class="bg-lbl" style="color:#5090e0">AI CARD</div><div class="bg-head"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div><div class="bg-grid" id="ai"></div></div>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 BINGO!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='bingo';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let youCard, aiCard, youMark, aiMark, called, pool, over;
+function genCard(){ const cols=[]; for(let c=0;c<5;c++){ const lo=c*15+1, nums=[]; for(let i=lo;i<lo+15;i++)nums.push(i); for(let i=nums.length-1;i>0;i--){const j=0|Math.random()*(i+1);[nums[i],nums[j]]=[nums[j],nums[i]];} cols.push(nums.slice(0,5)); }
+  const grid=[]; for(let r=0;r<5;r++){ grid.push([]); for(let c=0;c<5;c++) grid[r].push((r===2&&c===2)?0:cols[c][r]); } return grid; }
+function newGame(){ youCard=genCard(); aiCard=genCard(); youMark=mask(); aiMark=mask(); youMark[2][2]=true; aiMark[2][2]=true; called=new Set(); over=false;
+  pool=[]; for(let i=1;i<=75;i++)pool.push(i); for(let i=pool.length-1;i>0;i--){const j=0|Math.random()*(i+1);[pool[i],pool[j]]=[pool[j],pool[i]];}
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('ball').textContent='—'; document.getElementById('recent').textContent=''; document.getElementById('count').textContent=0; document.getElementById('draw').disabled=false; setMsg("Click your matching numbers as they're called!"); render(); }
+function mask(){ return Array.from({length:5},()=>Array(5).fill(false)); }
+function letter(n){ return ['B','I','N','G','O'][Math.floor((n-1)/15)]; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function drawBall(){ if(over||!pool.length)return; const n=pool.pop(); called.add(n); sfx('select');
+  document.getElementById('ball').textContent=letter(n)+n; document.getElementById('count').textContent=called.size;
+  const rec=[...called].slice(-8).reverse().map(x=>letter(x)+x).join('  '); document.getElementById('recent').textContent=rec;
+  // AI auto-marks
+  for(let r=0;r<5;r++)for(let c=0;c<5;c++)if(aiCard[r][c]===n)aiMark[r][c]=true;
+  render();
+  if(hasBingo(aiMark)){ return finish(false); }
+  if(!pool.length){ setMsg('All balls called!'); document.getElementById('draw').disabled=true; }
+}
+function clickYou(r,c){ if(over)return; const n=youCard[r][c]; if(n===0)return; if(!called.has(n)){ setMsg(letter(n)+n+" hasn't been called yet."); sfx('error'); return; }
+  youMark[r][c]=!youMark[r][c]; sfx('place'); render(); if(hasBingo(youMark)) finish(true); }
+function lines(m){ const L=[]; for(let r=0;r<5;r++)L.push(m[r]); for(let c=0;c<5;c++)L.push([0,1,2,3,4].map(r=>m[r][c])); L.push([0,1,2,3,4].map(i=>m[i][i])); L.push([0,1,2,3,4].map(i=>m[i][4-i])); return L; }
+function hasBingo(m){ return lines(m).some(l=>l.every(x=>x)); }
+function render(){ drawCard('you',youCard,youMark,false); drawCard('ai',aiCard,aiMark,true); }
+function drawCard(id,card,mark,ai){ const g=document.getElementById(id); g.innerHTML=''; for(let r=0;r<5;r++)for(let c=0;c<5;c++){ const d=document.createElement('div'); const free=card[r][c]===0; d.className='bg-c'+(free?' free':'')+(mark[r][c]?' marked':'')+(ai?' ai':''); d.textContent=free?'★':card[r][c]; if(!ai&&!free)d.onclick=()=>clickYou(r,c); g.appendChild(d); } }
+function finish(youWin){ over=true; document.getElementById('draw').disabled=true; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=youWin?'🏆 BINGO!':'🤖 AI BINGO!'; document.getElementById('win-sub').textContent=youWin?'You completed a line first!':'The AI got a line first.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),350); }
+newGame();
+</script>
+</body>
+</html>

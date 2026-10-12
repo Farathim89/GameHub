@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Memory</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.mem-wrap{display:flex;flex-direction:column;align-items:center;padding:16px;gap:12px;flex:1;}
+.mem-grid{display:grid;gap:8px;width:min(520px,96vw);}
+.mem-card{
+  aspect-ratio:1;border-radius:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid #333;transition:transform .35s,background .2s,border-color .2s;
+  user-select:none;font-size:clamp(20px,5vw,36px);
+  perspective:600px;position:relative;
+}
+.mem-card.face-down{
+  background:linear-gradient(135deg,#1a3a6a 25%,#0d2040 25%,#0d2040 50%,#1a3a6a 50%,#1a3a6a 75%,#0d2040 75%);
+  background-size:12px 12px;border-color:#2a5aaa;
+}
+.mem-card.face-down:hover{transform:scale(1.06);border-color:#4a7aee;}
+.mem-card.face-up{background:var(--surface2);border-color:#f472b6;transform:scale(1.04);}
+.mem-card.matched{background:rgba(52,211,153,.12);border-color:#34d399;transform:scale(1);cursor:default;}
+.mem-card.wrong{animation:shake .4s ease;border-color:var(--red);}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.score-bar{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+.score-box{font-family:'Orbitron',monospace;font-size:15px;padding:8px 16px;border-radius:8px;border:2px solid;letter-spacing:2px;transition:all .3s;}
+.turn-indicator{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;padding:8px 18px;border-radius:8px;border:2px solid var(--border);letter-spacing:2px;color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f472b6">🧠 MEMORY</span>
+  <div class="h-btns">
+    <select id="mode-sel" onchange="initMemory()">
+      <option value="solo">SOLO</option>
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai" selected>VS AI</option>
+    </select>
+    <select id="size-sel" onchange="initMemory()">
+      <option value="4x4">4×4 (Easy)</option>
+      <option value="5x4">5×4 (Medium)</option>
+      <option value="6x6" selected>6×6 (Hard)</option>
+    </select>
+    <div class="info-pill">PAIRS: <span id="pairs-found">0</span>/<span id="pairs-total">18</span></div>
+    <div class="info-pill">MOVES: <span id="moves-cnt">0</span></div>
+    <button class="hbtn" onclick="initMemory()">NEW GAME</button>
+  </div>
+</div>
+
+<div id="mode-pick" class="mode-wrap">
+  <div class="mode-title" style="color:#f472b6">MEMORY</div>
+  <div class="mode-btns">
+    <button class="mbtn accent" onclick="memPickMode('solo')">🧠 SOLO</button>
+    <button class="mbtn blue" onclick="memPickMode('2p')">👥 2 PLAYERS</button>
+    <button class="mbtn green" onclick="memPickMode('ai')">🤖 VS AI</button>
+  </div>
+</div>
+
+<div id="mem-game" style="display:none;">
+  <div class="mem-wrap">
+    <div class="score-bar" id="score-bar"></div>
+    <div class="mem-grid" id="mem-grid"></div>
+  </div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🧠 COMPLETE!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="initMemory()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+const EMOJIS=['🍎','🍊','🍋','🍇','🍓','🍑','🥝','🍉','🌸','🌻','⭐','🌙','🔥','💎','🎸','🎯','🚀','🦋','🐬','🦁','🌈','🍕','🎃','🏆'];
+let cards=[], flipped=[], matched=[], moves=0, scores=[0,0], turn=0, locked=false;
+let memMode='ai', gridCols=6, gridRows=6, totalPairs=18;
+const aiMemory={};
+
+function memPickMode(m){document.getElementById('mode-sel').value=m;initMemory();}
+
+function initMemory(){
+  document.getElementById('win-overlay').classList.remove('show');
+  memMode=document.getElementById('mode-sel').value;
+  const size=document.getElementById('size-sel').value;
+  if(size==='4x4'){gridCols=4;gridRows=4;totalPairs=8;}
+  else if(size==='5x4'){gridCols=5;gridRows=4;totalPairs=10;}
+  else{gridCols=6;gridRows=6;totalPairs=18;}
+
+  document.getElementById('mode-pick').style.display='none';
+  document.getElementById('mem-game').style.display='block';
+  document.getElementById('pairs-total').textContent=totalPairs;
+
+  const emojis=EMOJIS.slice(0,totalPairs);
+  const pairs=[...emojis,...emojis];
+  // proper shuffle
+  for(let i=pairs.length-1;i>0;i--){const j=0|Math.random()*(i+1);[pairs[i],pairs[j]]=[pairs[j],pairs[i]];}
+  cards=pairs.map(e=>({emoji:e,faceUp:false,matched:false}));
+  flipped=[]; matched=[]; moves=0; scores=[0,0]; turn=0; locked=false;
+  Object.keys(aiMemory).forEach(k=>delete aiMemory[k]);
+  document.getElementById('pairs-found').textContent=0;
+  document.getElementById('moves-cnt').textContent=0;
+  renderScoreBar();
+  renderGrid();
+}
+
+function renderScoreBar(){
+  const bar=document.getElementById('score-bar');
+  if(memMode==='solo'){
+    bar.innerHTML=`<div class="turn-indicator">🧠 SOLO — Find all pairs!</div>`;
+    return;
+  }
+  const p2name=memMode==='ai'?'🤖 AI':'🟣 P2';
+  bar.innerHTML=`
+    <div class="score-box" style="color:${turn===0?'#f472b6':'#555'};border-color:${turn===0?'#f472b6':'#333'};">🟡 P1: ${scores[0]}${turn===0?' ◀':''}</div>
+    <div class="score-box" style="color:${turn===1?'#fb923c':'#555'};border-color:${turn===1?'#fb923c':'#333'};">${p2name}: ${scores[1]}${turn===1?' ◀':''}</div>
+  `;
+}
+
+function renderGrid(){
+  const g=document.getElementById('mem-grid');
+  const cellSize=Math.floor(Math.min(520,window.innerWidth*0.96)/gridCols)-8;
+  g.style.gridTemplateColumns=`repeat(${gridCols},1fr)`;
+  g.innerHTML='';
+  cards.forEach((card,i)=>{
+    const div=document.createElement('div');
+    div.style.fontSize=`${Math.floor(cellSize*0.42)}px`;
+    if(card.matched){
+      div.className='mem-card matched';
+      div.textContent=card.emoji;
+    } else if(card.faceUp||flipped.includes(i)){
+      div.className='mem-card face-up';
+      div.textContent=card.emoji;
+    } else {
+      div.className='mem-card face-down';
+      div.textContent='';
+    }
+    div.addEventListener('click',()=>flip(i));
+    g.appendChild(div);
+  });
+}
+
+function flip(i){
+  if(locked)return;
+  if(cards[i].matched)return;
+  if(flipped.includes(i))return;
+  if(flipped.length>=2)return;
+  if(memMode==='ai'&&turn===1)return;
+
+  // AI learns card positions
+  aiMemory[i]=cards[i].emoji;
+
+  flipped.push(i);
+  renderGrid();
+
+  if(flipped.length===2){
+    moves++;
+    document.getElementById('moves-cnt').textContent=moves;
+    locked=true;
+    const [a,b]=flipped;
+    if(cards[a].emoji===cards[b].emoji){
+      // Match!
+      setTimeout(()=>{
+        cards[a].matched=true; cards[b].matched=true;
+        matched.push(a,b);
+        scores[turn]++;
+        document.getElementById('pairs-found').textContent=matched.length/2;
+        flipped=[];locked=false;
+        renderScoreBar();renderGrid();
+        if(matched.length===cards.length){
+          endMemory();return;
+        }
+        // same player goes again
+        if(memMode==='ai'&&turn===1) setTimeout(aiFlip,600);
+      },600);
+    } else {
+      // No match
+      // flash wrong
+      setTimeout(()=>{
+        const els=document.getElementById('mem-grid').children;
+        [a,b].forEach(idx=>{if(els[idx])els[idx].classList.add('wrong');});
+        setTimeout(()=>{
+          flipped=[];locked=false;
+          if(memMode!=='solo') turn=1-turn;
+          renderScoreBar();renderGrid();
+          if(memMode==='ai'&&turn===1) setTimeout(aiFlip,600);
+        },600);
+      },200);
+    }
+  }
+}
+
+function endMemory(){
+  let msg,sub;
+  if(memMode==='solo'){
+    msg='🧠 COMPLETE!';sub=`${moves} moves — ${totalPairs} pairs found`;
+  } else {
+    if(scores[0]>scores[1]) msg=`🏆 PLAYER 1 WINS!`;
+    else if(scores[1]>scores[0]) msg=memMode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!';
+    else msg='🤝 TIE GAME!';
+    sub=`🟡 P1: ${scores[0]} — ${memMode==='ai'?'🤖 AI':'🟣 P2'}: ${scores[1]}`;
+  }
+  document.getElementById('win-msg').textContent=msg;
+  document.getElementById('win-sub').textContent=sub;
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400);
+}
+
+// AI: remembers seen cards, tries to make matches
+function aiFlip(){
+  if(turn!==1||locked)return;
+  const unmatched=cards.map((_,i)=>i).filter(i=>!cards[i].matched);
+
+  // find a known pair
+  const byEmoji={};
+  unmatched.forEach(i=>{
+    if(aiMemory[i]!==undefined){
+      const e=aiMemory[i];
+      (byEmoji[e]=byEmoji[e]||[]).push(i);
+    }
+  });
+  let firstPick=-1, secondPick=-1;
+  for(const e in byEmoji){
+    if(byEmoji[e].length>=2){[firstPick,secondPick]=byEmoji[e];break;}
+  }
+
+  // No known pair — pick random unknown first
+  if(firstPick<0){
+    const unknowns=unmatched.filter(i=>aiMemory[i]===undefined);
+    const known=unmatched.filter(i=>aiMemory[i]!==undefined);
+    // pick unknown first card
+    firstPick=unknowns.length?unknowns[Math.floor(Math.random()*unknowns.length)]:unmatched[0];
+    // try to match with known card
+    const firstEmoji=aiMemory[firstPick]; // might be undefined (truly unknown)
+    if(firstEmoji){
+      const match=unmatched.find(i=>i!==firstPick&&aiMemory[i]===firstEmoji);
+      if(match!==undefined)secondPick=match;
+      else{
+        const alt=unknowns.find(i=>i!==firstPick);
+        if(alt!==undefined)secondPick=alt;
+        else secondPick=(known[0]!==firstPick?known[0]:known[1])??-1;
+      }
+    } else {
+      // pick second unknown
+      const others=unknowns.filter(i=>i!==firstPick);
+      if(others.length)secondPick=others[Math.floor(Math.random()*others.length)];
+      else{const alt=unmatched.find(i=>i!==firstPick);secondPick=alt!==undefined?alt:-1;}
+    }
+  }
+
+  if(firstPick<0||secondPick<0||firstPick===secondPick)return;
+
+  // reveal first
+  aiMemory[firstPick]=cards[firstPick].emoji;
+  flipped=[firstPick];
+  renderGrid();
+  setTimeout(()=>{
+    aiMemory[secondPick]=cards[secondPick].emoji;
+    flipped=[firstPick,secondPick];
+    moves++;document.getElementById('moves-cnt').textContent=moves;
+    locked=true;
+    renderGrid();
+    setTimeout(()=>{
+      const [a,b]=[firstPick,secondPick];
+      if(cards[a].emoji===cards[b].emoji){
+        cards[a].matched=true;cards[b].matched=true;
+        matched.push(a,b);scores[1]++;
+        document.getElementById('pairs-found').textContent=matched.length/2;
+        flipped=[];locked=false;
+        renderScoreBar();renderGrid();
+        if(matched.length===cards.length){endMemory();return;}
+        setTimeout(aiFlip,600);
+      } else {
+        const els=document.getElementById('mem-grid').children;
+        [a,b].forEach(idx=>{if(els[idx])els[idx].classList.add('wrong');});
+        setTimeout(()=>{
+          flipped=[];locked=false;turn=0;
+          renderScoreBar();renderGrid();
+        },500);
+      }
+    },700);
+  },600);
+}
+
+document.getElementById('mode-pick').style.display='flex';
+document.getElementById('mem-game').style.display='none';
+</script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asteroids</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.as-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#asteroids{background:#04060e;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.as-ctrls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.as-ctrls button{font-size:18px;width:60px;height:48px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.as-ctrls button:active{background:rgba(240,192,64,.18);}
+.as-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">☄️ ASTEROIDS</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <div class="info-pill">LIVES: <span id="lives">3</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="as-wrap">
+  <div class="as-hint">Rotate: <b>← →</b> · Thrust: <b>↑</b> · Fire: <b>Space</b> · wrap around the edges.</div>
+  <canvas id="asteroids" width="600" height="440"></canvas>
+  <div class="as-ctrls">
+    <button onpointerdown="hold('l',1)" onpointerup="hold('l',0)" onpointerleave="hold('l',0)">↺</button>
+    <button onpointerdown="hold('t',1)" onpointerup="hold('t',0)" onpointerleave="hold('t',0)">🔥</button>
+    <button onpointerdown="hold('r',1)" onpointerup="hold('r',0)" onpointerleave="hold('r',0)">↻</button>
+    <button onpointerdown="fire()">🔫</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='asteroids';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('asteroids'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height;
+let ship, rocks, bullets, score, best, lives, wave, over, raf, L=false,R=false,T=false, lastFire=0, inv=0;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  score=0; lives=3; wave=1; over=false;
+  ship={x:W/2,y:H/2,a:-Math.PI/2,vx:0,vy:0,r:12};
+  bullets=[]; inv=90;
+  spawnRocks(4);
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('best').textContent=best;
+  updateHud();
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+}
+function spawnRocks(n){
+  rocks=[];
+  for(let i=0;i<n;i++){
+    let x,y;
+    do{ x=Math.random()*W; y=Math.random()*H; }while(Math.hypot(x-ship.x,y-ship.y)<120);
+    rocks.push(mkRock(x,y,3));
+  }
+}
+function mkRock(x,y,size){
+  const sp=(4-size)*0.5+0.5;
+  const ang=Math.random()*7;
+  const verts=[]; const n=8+(0|Math.random()*4);
+  for(let i=0;i<n;i++) verts.push(0.7+Math.random()*0.5);
+  return {x,y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,size,r:size*14,verts,rot:Math.random()*7,vr:(Math.random()-0.5)*0.05};
+}
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function wrap(o){ if(o.x<0)o.x+=W; if(o.x>W)o.x-=W; if(o.y<0)o.y+=H; if(o.y>H)o.y-=H; }
+function update(){
+  if(L)ship.a-=0.07; if(R)ship.a+=0.07;
+  if(T){ ship.vx+=Math.cos(ship.a)*0.12; ship.vy+=Math.sin(ship.a)*0.12; }
+  ship.vx*=0.99; ship.vy*=0.99;
+  ship.x+=ship.vx; ship.y+=ship.vy; wrap(ship);
+  if(inv>0)inv--;
+  bullets.forEach(b=>{b.x+=b.vx;b.y+=b.vy;b.life--;wrap(b);});
+  bullets=bullets.filter(b=>b.life>0);
+  rocks.forEach(a=>{a.x+=a.vx;a.y+=a.vy;a.rot+=a.vr;wrap(a);});
+  // bullet-rock
+  for(const b of bullets){ for(const a of rocks){ if(!a.dead&&Math.hypot(b.x-a.x,b.y-a.y)<a.r){ a.dead=true; b.dead=true; score+=(4-a.size)*20; sfx('hit'); splitRock(a); break; } } }
+  bullets=bullets.filter(b=>!b.dead); rocks=rocks.filter(a=>!a.dead);
+  // ship-rock
+  if(inv<=0){ for(const a of rocks){ if(Math.hypot(ship.x-a.x,ship.y-a.y)<a.r+ship.r){ loseLife(); break; } } }
+  updateHud();
+  if(!rocks.length){ wave++; ship.x=W/2;ship.y=H/2;ship.vx=ship.vy=0; inv=90; spawnRocks(3+wave); }
+}
+function splitRock(a){ if(a.size>1){ rocks.push(mkRock(a.x,a.y,a.size-1),mkRock(a.x,a.y,a.size-1)); } }
+function loseLife(){
+  lives--; sfx('lose');
+  if(lives<=0) return endGame();
+  ship.x=W/2;ship.y=H/2;ship.vx=ship.vy=0;ship.a=-Math.PI/2; inv=100;
+}
+function fire(){
+  if(over) return;
+  const now=performance.now(); if(now-lastFire<220)return; lastFire=now;
+  bullets.push({x:ship.x+Math.cos(ship.a)*14,y:ship.y+Math.sin(ship.a)*14,vx:Math.cos(ship.a)*7+ship.vx,vy:Math.sin(ship.a)*7+ship.vy,life:55});
+  sfx('select');
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#c0c0d0'; ctx.lineWidth=1.6;
+  for(const a of rocks){ ctx.save(); ctx.translate(a.x,a.y); ctx.rotate(a.rot); ctx.beginPath();
+    for(let i=0;i<a.verts.length;i++){ const ang=i/a.verts.length*7; const rr=a.r*a.verts[i]; const x=Math.cos(ang)*rr,y=Math.sin(ang)*rr; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+    ctx.closePath(); ctx.stroke(); ctx.restore();
+  }
+  ctx.fillStyle='#f0f0f0'; bullets.forEach(b=>{ctx.beginPath();ctx.arc(b.x,b.y,2,0,7);ctx.fill();});
+  // ship
+  if(inv<=0 || Math.floor(inv/5)%2===0){
+    ctx.save(); ctx.translate(ship.x,ship.y); ctx.rotate(ship.a);
+    ctx.strokeStyle='#f0c040'; ctx.lineWidth=2; ctx.beginPath();
+    ctx.moveTo(14,0); ctx.lineTo(-10,-8); ctx.lineTo(-5,0); ctx.lineTo(-10,8); ctx.closePath(); ctx.stroke();
+    if(T){ ctx.strokeStyle='#e05050'; ctx.beginPath(); ctx.moveTo(-5,0);ctx.lineTo(-14,0); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('lives').textContent=lives; }
+function endGame(){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Score '+score+' · wave '+wave+(r.isBest&&score>0?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+function hold(k,v){ if(k==='l')L=!!v; else if(k==='r')R=!!v; else if(k==='t')T=!!v; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'){L=true;e.preventDefault();} if(e.key==='ArrowRight'){R=true;e.preventDefault();}
+  if(e.key==='ArrowUp'){T=true;e.preventDefault();} if(e.key===' '){fire();e.preventDefault();}
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft')L=false; if(e.key==='ArrowRight')R=false; if(e.key==='ArrowUp')T=false;
+});
+newGame();
+</script>
+</body>
+</html>

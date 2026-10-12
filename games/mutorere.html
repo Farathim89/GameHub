@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mu Torere</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.mt-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 12px;}
+#mtsvg{touch-action:manipulation;max-width:100%;}
+.mt-status{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;min-height:22px;letter-spacing:1px;}
+.mt-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:440px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">◉ MU TORERE</span>
+  <div class="h-btns"><select id="mode-sel" onchange="newGame()"><option value="2p">2 PLAYERS</option><option value="ai" selected>VS AI</option></select><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="mt-wrap">
+  <div class="mt-status" id="status">Your move</div>
+  <div class="mt-hint">Slide a piece to the empty spot. You may only move to the <b>centre</b> from a spot next to an enemy piece. The player who <b>can't move loses</b>.</div>
+  <svg id="mtsvg" width="360" height="360" viewBox="0 0 360 360"></svg>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='mutorere';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let bd=[], turn=1, mode='ai', sel=-1, over=false, busy=false; // bd[0..7]=outer, [8]=center; 1=you(black) 2=ai(white)
+const POS=[]; for(let i=0;i<8;i++){const a=Math.PI/180*(i*45-90); POS.push([180+130*Math.cos(a),180+130*Math.sin(a)]);} POS.push([180,180]);
+function ring(i){ return [(i+1)%8,(i+7)%8]; }
+function adj(i){ return i===8? [0,1,2,3,4,5,6,7] : [(i+1)%8,(i+7)%8,8]; }
+function newGame(){ mode=document.getElementById('mode-sel').value; bd=[1,1,1,1,2,2,2,2,0]; turn=1; sel=-1; over=false; busy=false;
+  document.getElementById('win-overlay').classList.remove('show'); draw(); status(); }
+function legalMoves(p){ const mv=[]; const empty=bd.indexOf(0); for(let i=0;i<9;i++){ if(bd[i]!==p)continue; if(adj(i).includes(empty)){ if(empty===8){ // moving to center: need i adjacent (ring) to opponent
+      const opp=p===1?2:1; if(ring(i).some(j=>bd[j]===opp)) mv.push([i,empty]); } else mv.push([i,empty]); } } return mv; }
+function click(i){ if(over||busy)return; if(mode==='ai'&&turn===2)return;
+  if(bd[i]===turn){ sel=i; draw(); return; }
+  if(sel>=0 && bd[i]===0 && legalMoves(turn).some(([f,t])=>f===sel&&t===i)){ doMove(sel,i); } }
+function doMove(f,t){ bd[t]=bd[f]; bd[f]=0; sel=-1; sfx('place'); draw();
+  const next=turn===1?2:1; if(legalMoves(next).length===0){ return endGame(turn); }
+  turn=next; status(); if(mode==='ai'&&turn===2&&!over){ busy=true; status(); setTimeout(aiMove,450); } }
+function aiMove(){ if(over)return; const mv=legalMoves(2); if(!mv.length){ busy=false; return endGame(1); }
+  // minimax: pick move maximizing (opp has no move) else minimize opp mobility
+  let best=mv[0],bv=-1e9; for(const m of mv){ const s=bd.slice(); bd[m[1]]=bd[m[0]]; bd[m[0]]=0; const v=-negamax(1,5); bd.splice(0,9,...s); if(v>bv){bv=v;best=m;} }
+  busy=false; doMove(best[0],best[1]); }
+function negamax(p,depth){ const mv=legalMoves(p); if(mv.length===0) return -1000-depth; if(depth===0){ const opp=p===1?2:1; return legalMoves(opp).length - mv.length; }
+  let bv=-1e9; for(const m of mv){ const s=bd.slice(); bd[m[1]]=bd[m[0]]; bd[m[0]]=0; const v=-negamax(p===1?2:1,depth-1); bd.splice(0,9,...s); if(v>bv)bv=v; } return bv; }
+function endGame(winner){ over=true; busy=false; const youWin=winner===1; if(youWin&&mode==='ai'&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('status').textContent=''; document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':(mode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!');
+  document.getElementById('win-sub').textContent=(winner===1?'Black':'White')+' trapped the opponent!'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),350); }
+function status(){ if(over)return; const el=document.getElementById('status'); el.textContent=busy?'🤖 AI thinking…':(turn===1?'⚫ Your move':'⚪ Player 2 move'); el.style.color=turn===1?'#f0a040':'#5090e0'; }
+function draw(){ const svg=document.getElementById('mtsvg'); let h='';
+  // spokes
+  for(let i=0;i<8;i++){ h+=`<line x1="${POS[8][0]}" y1="${POS[8][1]}" x2="${POS[i][0]}" y2="${POS[i][1]}" stroke="#5a4a2a" stroke-width="3"/>`; }
+  for(let i=0;i<8;i++){ const j=(i+1)%8; h+=`<line x1="${POS[i][0]}" y1="${POS[i][1]}" x2="${POS[j][0]}" y2="${POS[j][1]}" stroke="#5a4a2a" stroke-width="3"/>`; }
+  const legal = (mode==='ai'&&turn===2)?[]:legalMoves(turn);
+  for(let i=0;i<9;i++){ const [x,y]=POS[i]; const canSel=bd[i]===turn && !over && !(mode==='ai'&&turn===2) && legal.some(m=>m[0]===i); const isDest=sel>=0 && bd[i]===0 && legal.some(m=>m[0]===sel&&m[1]===i);
+    h+=`<circle cx="${x}" cy="${y}" r="26" fill="${isDest?'rgba(64,192,160,.3)':'#2a2018'}" stroke="${sel===i?'#f0c040':'#5a4a2a'}" stroke-width="${sel===i?4:2}" style="cursor:pointer" onclick="click(${i})"/>`;
+    if(bd[i]){ const col=bd[i]===1?'#333':'#e8e8e8'; h+=`<circle cx="${x}" cy="${y}" r="18" fill="${col}" stroke="#000" stroke-width="1.5" style="cursor:pointer" onclick="click(${i})"/>`; if(canSel)h+=`<circle cx="${x}" cy="${y}" r="22" fill="none" stroke="#40c0a0" stroke-width="2" opacity=".6" style="pointer-events:none"/>`; }
+  }
+  svg.innerHTML=h;
+}
+newGame();
+</script>
+</body>
+</html>

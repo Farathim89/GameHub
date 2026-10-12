@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clobber</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.cb-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px;}
+.cb-board{display:grid;gap:4px;background:var(--surface);padding:8px;border-radius:12px;border:2px solid var(--border);}
+.cb-cell{border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
+.cb-stone{width:76%;height:76%;border-radius:50%;}
+.cb-stone.b{background:radial-gradient(circle at 34% 30%,#555,#000);} .cb-stone.w{background:radial-gradient(circle at 34% 30%,#fff,#ccc);}
+.cb-cell.sel{box-shadow:inset 0 0 0 3px var(--accent);}
+.cb-cell.dest::after{content:'';position:absolute;inset:14%;border-radius:50%;border:3px dashed var(--green);}
+.cb-status{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;min-height:20px;}
+.cb-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:440px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">⚫⚪ CLOBBER</span>
+  <div class="h-btns"><select id="mode-sel" onchange="newGame()"><option value="2p">2 PLAYERS</option><option value="ai" selected>VS AI</option></select><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="cb-wrap">
+  <div class="cb-status" id="status">Your move</div>
+  <div class="cb-hint">Move one of your stones onto an <b>adjacent enemy</b> to clobber it. Every move is a capture — the player who <b>can't move loses</b>.</div>
+  <div id="board" class="cb-board"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='clobber';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const ROWS=6, COLS=5; let bd=[], turn=1, mode='ai', sel=null, dests=[], over=false, busy=false; // 1 black(you) 2 white
+function newGame(){ mode=document.getElementById('mode-sel').value; bd=Array.from({length:ROWS},()=>Array(COLS).fill(0)); for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)bd[r][c]=((r+c)%2===0)?1:2; turn=1; sel=null; dests=[]; over=false; busy=false; document.getElementById('win-overlay').classList.remove('show'); render(); status(); }
+function inB(r,c){ return r>=0&&r<ROWS&&c>=0&&c<COLS; }
+function movesFor(r,c){ const p=bd[r][c]; const opp=p===1?2:1; const out=[]; for(const [dr,dc] of [[0,1],[0,-1],[1,0],[-1,0]]){ const nr=r+dr,nc=c+dc; if(inB(nr,nc)&&bd[nr][nc]===opp)out.push([nr,nc]); } return out; }
+function allMoves(p){ const mv=[]; for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(bd[r][c]===p)for(const [nr,nc] of movesFor(r,c))mv.push([r,c,nr,nc]); return mv; }
+function click(r,c){ if(over||busy||(mode==='ai'&&turn===2))return; if(bd[r][c]===turn){ sel=[r,c]; dests=movesFor(r,c); render(); return; } if(sel&&dests.some(([dr,dc])=>dr===r&&dc===c)){ doMove(sel[0],sel[1],r,c); } }
+function doMove(r,c,nr,nc){ const p=bd[r][c]; bd[nr][nc]=p; bd[r][c]=0; sel=null; dests=[]; sfx('hit'); render(); const opp=p===1?2:1; if(allMoves(opp).length===0) return win(p); turn=opp; status(); if(mode==='ai'&&turn===2&&!over){ busy=true; status(); setTimeout(aiMove,350); } }
+function aiMove(){ if(over)return; const mv=allMoves(2); if(!mv.length){ busy=false; return win(1); } let best=mv[0],bv=-1e9; for(const m of mv){ const s=bd.map(r=>r.slice()); bd[m[2]][m[3]]=2; bd[m[0]][m[1]]=0; const v=allMoves(2).length-allMoves(1).length + Math.random(); bd=s; if(v>bv){bv=v;best=m;} } busy=false; doMove(best[0],best[1],best[2],best[3]); }
+function render(){ const b=document.getElementById('board'); const cell=Math.floor(Math.min(window.innerWidth-40,360)/COLS); b.style.gridTemplateColumns=`repeat(${COLS},${cell}px)`; b.innerHTML=''; const destSet=new Set(dests.map(d=>d.join(','))); for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ const d=document.createElement('div'); d.className='cb-cell'+(sel&&sel[0]===r&&sel[1]===c?' sel':'')+(destSet.has(r+','+c)?' dest':''); d.style.width=cell+'px'; d.style.height=cell+'px'; if(bd[r][c]){const s=document.createElement('div');s.className='cb-stone '+(bd[r][c]===1?'b':'w');d.appendChild(s);} d.onclick=()=>click(r,c); b.appendChild(d); } }
+function status(){ if(over)return; const el=document.getElementById('status'); el.textContent=busy?'🤖 AI thinking…':(turn===1?'⚫ Your move':'⚪ Player 2 move'); el.style.color=turn===1?'#aaa':'#5090e0'; }
+function win(p){ over=true; busy=false; const youWin=p===1; if(youWin&&mode==='ai'&&window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':(mode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!'); document.getElementById('win-sub').textContent='Opponent has no moves left!'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),350); }
+window.addEventListener('resize',()=>{ if(bd.length)render(); });
+newGame();
+</script>
+</body>
+</html>

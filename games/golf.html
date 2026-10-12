@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Golf Solitaire</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.gs-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:14px 8px;}
+.gs-tableau{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+.gs-col{display:flex;flex-direction:column;gap:-40px;}
+.card{width:58px;height:82px;font-size:19px;} .card .ctop{padding:4px 6px;}
+.gs-col .card{margin-bottom:-52px;}
+.gs-col .card:last-child{margin-bottom:0;}
+.gs-col .card.playable{cursor:pointer;box-shadow:0 0 0 2px var(--green),2px 3px 8px rgba(0,0,0,.5);}
+.gs-col .card.playable:hover{transform:translateY(-4px);}
+.gs-col .card.locked{filter:brightness(.82);}
+.gs-bottom{display:flex;gap:20px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.gs-pile{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.gs-lbl{font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);letter-spacing:1px;}
+.gs-empty{width:58px;height:82px;border:2px dashed var(--border);border-radius:10px;}
+.gs-msg{font-family:'Orbitron',monospace;font-size:13px;min-height:20px;text-align:center;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">⛳ GOLF SOLITAIRE</span>
+  <div class="h-btns">
+    <label style="font-family:'Share Tech Mono';font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;"><input type="checkbox" id="wrap"> A↔K wrap</label>
+    <div class="info-pill">LEFT: <span id="left">35</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="gs-wrap">
+  <div class="gs-msg" id="msg">Play tableau cards one rank up or down from the waste card.</div>
+  <div class="gs-tableau" id="tableau"></div>
+  <div class="gs-bottom">
+    <div class="gs-pile"><div class="gs-lbl">STOCK (<span id="stockN">0</span>)</div><div id="stock"></div></div>
+    <div class="gs-pile"><div class="gs-lbl">WASTE</div><div id="waste"></div></div>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 CLEARED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='golf';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let cols=[], stock=[], waste=[], over=false, wrapOn=false;
+function newGame(){
+  wrapOn=document.getElementById('wrap').checked;
+  let deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck);
+  cols=[]; for(let c=0;c<7;c++){ cols[c]=[]; for(let i=0;i<5;i++) cols[c].push(deck.pop()); }
+  stock=deck; waste=[stock.pop()]; over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  render();
+  document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*22)+'ms';});
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function wtop(){ return waste[waste.length-1]; }
+function canPlay(card){ if(!waste.length)return false; const d=Math.abs(card.r-wtop().r); return d===1 || (wrapOn&&d===12); }
+function cardHTML(card,cls){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'} ${cls||''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function render(){
+  const t=document.getElementById('tableau'); t.innerHTML='';
+  cols.forEach((col,ci)=>{
+    const colEl=document.createElement('div'); colEl.className='gs-col';
+    col.forEach((card,i)=>{ const isBottom=i===col.length-1; const play=isBottom&&canPlay(card);
+      const div=document.createElement('div'); div.innerHTML=cardHTML(card,(play?'playable':(isBottom?'':'locked'))); const el=div.firstChild;
+      if(play) el.onclick=()=>playCard(ci);
+      colEl.appendChild(el);
+    });
+    if(!col.length){ const e=document.createElement('div'); e.className='gs-empty'; colEl.appendChild(e); }
+    t.appendChild(colEl);
+  });
+  const st=document.getElementById('stock'); st.innerHTML=stock.length?'<div class="card back" style="cursor:pointer"></div>':'<div class="gs-empty"></div>'; if(stock.length)st.firstChild.onclick=drawStock;
+  document.getElementById('stockN').textContent=stock.length;
+  document.getElementById('waste').innerHTML=waste.length?cardHTML(wtop()):'<div class="gs-empty"></div>';
+  const left=cols.reduce((s,c)=>s+c.length,0);
+  document.getElementById('left').textContent=left;
+  if(left===0&&!over) return win();
+  checkStuck();
+}
+function playCard(ci){
+  if(over) return; const col=cols[ci]; if(!col.length)return; const card=col[col.length-1];
+  if(!canPlay(card)){ sfx('error'); return; }
+  waste.push(col.pop()); sfx('place'); render();
+}
+function drawStock(){ if(over||!stock.length)return; waste.push(stock.pop()); sfx('flip'); render(); }
+function anyMove(){ return cols.some(c=>c.length&&canPlay(c[c.length-1])); }
+function checkStuck(){ if(over)return; if(!anyMove()&&!stock.length){ over=true; const left=cols.reduce((s,c)=>s+c.length,0); const cleared=35-left; if(window.GH)GH.score.best(GAME,'bestCleared',cleared,'high');
+  document.getElementById('win-msg').textContent='🚫 NO MOVES'; document.getElementById('win-sub').textContent='Cleared '+cleared+' of 35 cards.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); } }
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-msg').textContent='🏆 CLEARED!'; document.getElementById('win-sub').textContent='You cleared the whole course! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+newGame();
+</script>
+</body>
+</html>

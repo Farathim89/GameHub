@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skyscrapers</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<script src="../themes/themes.js" defer></script><link rel="stylesheet" href="../themes/themes.css">
+<script src="../lang/lang.js" defer></script>
+<style>
+.ss-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.ss-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+.ss-board{display:grid;gap:3px;}
+.ss-clue{display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;color:var(--accent);}
+.ss-cell{display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;background:var(--surface2);border:2px solid var(--border);border-radius:6px;cursor:pointer;user-select:none;transition:transform .06s;}
+.ss-cell:hover{border-color:var(--accent);}
+.ss-cell.bad{color:#e05050;}
+.ss-blank{}
+.ss-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🏙️ SKYSCRAPERS</span>
+  <div class="h-btns"><select id="size-sel" onchange="newGame()"><option value="4" selected>4×4</option><option value="5">5×5</option><option value="6">6×6</option></select><button class="hbtn" onclick="clearAll()">CLEAR</button><button class="hbtn" onclick="newGame()">NEW</button></div>
+</div>
+<div class="ss-wrap">
+  <div class="ss-hint">Fill every row and column with <b>1–N</b>, no repeats. A number on the edge tells how many buildings are <b>visible</b> from that side (taller hides shorter). Click a cell to cycle its value.</div>
+  <div class="ss-board" id="board"></div>
+  <div class="ss-msg" id="msg"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='skyscrapers';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let N=4, sol=[], grid=[], clues={}, over=false;
+function newGame(){ N=parseInt(document.getElementById('size-sel').value,10); over=false; document.getElementById('win-overlay').classList.remove('show'); gen(); grid=Array.from({length:N},()=>Array(N).fill(0)); render(); setMsg(''); }
+function genLatin(){ // random reduced then shuffle
+  let base=Array.from({length:N},(_,r)=>Array.from({length:N},(_,c)=>((r+c)%N)+1));
+  // shuffle rows and cols and relabel
+  const perm=a=>{ for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; };
+  const rp=perm([...Array(N).keys()]), cp=perm([...Array(N).keys()]), lp=perm([...Array(N).keys()]);
+  const g=Array.from({length:N},()=>Array(N).fill(0));
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const v=base[rp[r]][cp[c]]; g[r][c]=lp[v-1]+1; }
+  return g;
+}
+function visible(arr){ let cnt=0,max=0; for(const v of arr){ if(v>max){ cnt++; max=v; } } return cnt; }
+function gen(){ sol=genLatin(); clues={top:[],bottom:[],left:[],right:[]};
+  for(let c=0;c<N;c++){ const col=[]; for(let r=0;r<N;r++)col.push(sol[r][c]); clues.top.push(visible(col)); clues.bottom.push(visible([...col].reverse())); }
+  for(let r=0;r<N;r++){ const row=sol[r]; clues.left.push(visible(row)); clues.right.push(visible([...row].reverse())); }
+}
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function clearAll(){ if(over)return; grid=Array.from({length:N},()=>Array(N).fill(0)); render(); setMsg(''); }
+function cycle(r,c){ if(over)return; grid[r][c]=(grid[r][c]+1)%(N+1); sfx('select'); render(); check(); }
+function render(){ const b=document.getElementById('board'); const sz=Math.floor(Math.min(window.innerWidth-50,420)/(N+2)); b.style.gridTemplateColumns='repeat('+(N+2)+','+sz+'px)'; b.innerHTML='';
+  const mk=(txt,cls)=>{ const d=document.createElement('div'); d.className=cls; d.style.width=sz+'px'; d.style.height=sz+'px'; d.style.fontSize=(sz*0.45)+'px'; d.textContent=txt; return d; };
+  // row 0: corner, top clues, corner
+  b.appendChild(mk('','ss-blank')); for(let c=0;c<N;c++)b.appendChild(mk(clues.top[c],'ss-clue')); b.appendChild(mk('','ss-blank'));
+  for(let r=0;r<N;r++){ b.appendChild(mk(clues.left[r],'ss-clue'));
+    for(let c=0;c<N;c++){ const cell=mk(grid[r][c]||'', 'ss-cell'); cell.onclick=()=>cycle(r,c); b.appendChild(cell); }
+    b.appendChild(mk(clues.right[r],'ss-clue')); }
+  b.appendChild(mk('','ss-blank')); for(let c=0;c<N;c++)b.appendChild(mk(clues.bottom[c],'ss-clue')); b.appendChild(mk('','ss-blank'));
+}
+function valid(){ // all filled, latin, clues match
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(!grid[r][c])return false;
+  for(let r=0;r<N;r++){ const s=new Set(grid[r]); if(s.size!==N)return false; }
+  for(let c=0;c<N;c++){ const col=[]; for(let r=0;r<N;r++)col.push(grid[r][c]); if(new Set(col).size!==N)return false; }
+  for(let c=0;c<N;c++){ const col=[]; for(let r=0;r<N;r++)col.push(grid[r][c]); if(visible(col)!==clues.top[c])return false; if(visible([...col].reverse())!==clues.bottom[c])return false; }
+  for(let r=0;r<N;r++){ if(visible(grid[r])!==clues.left[r])return false; if(visible([...grid[r]].reverse())!==clues.right[r])return false; }
+  return true;
+}
+function check(){ // count filled
+  let filled=0; for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(grid[r][c])filled++;
+  if(filled===N*N){ if(valid())win(); else setMsg('Grid full — but some clues or rows are off.'); } else setMsg(filled+' / '+(N*N)+' filled'); }
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='Every clue satisfied! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+window.addEventListener('resize',()=>{ if(sol.length)render(); });
+newGame();
+</script>
+</body>
+</html>

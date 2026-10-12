@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Whack-a-Mole</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.wm-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 12px;}
+.wm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:420px;width:100%;}
+.wm-hole{
+  aspect-ratio:1/1;border-radius:50%;background:radial-gradient(ellipse at 50% 85%,#2a1a0c,#160e06);
+  border:3px solid #3a2616;position:relative;overflow:hidden;cursor:pointer;box-shadow:inset 0 10px 20px rgba(0,0,0,.6);
+}
+.wm-mole{
+  position:absolute;left:12%;right:12%;bottom:-100%;top:auto;height:76%;border-radius:45% 45% 40% 40%;
+  background:radial-gradient(circle at 40% 30%,#b07040,#7a4a28);border:3px solid #5a3418;
+  transition:bottom .12s ease-out;display:flex;align-items:center;justify-content:center;font-size:30px;
+}
+.wm-hole.up .wm-mole{bottom:8%;}
+.wm-hole.bonk .wm-mole{background:radial-gradient(circle at 40% 30%,#e0a060,#b07040);}
+.wm-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+.wm-start{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;padding:14px 30px;border-radius:10px;border:3px solid var(--green);color:var(--green);background:var(--surface);cursor:pointer;letter-spacing:2px;}
+.wm-start:hover{background:rgba(64,192,160,.15);}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🔨 WHACK-A-MOLE</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <div class="info-pill">TIME: <span id="time">30</span></div>
+  </div>
+</div>
+<div class="wm-wrap">
+  <div class="wm-hint">Bonk the moles before they duck! 30 seconds.</div>
+  <button class="wm-start" id="start-btn" onclick="startGame()">▶ START</button>
+  <div id="grid" class="wm-grid"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">⏰ TIME!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="startGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='whackamole';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const HOLES=9;
+let score, timeLeft, running, popTimer, tickTimer, active=[], best;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function build(){
+  const g=document.getElementById('grid'); g.innerHTML='';
+  active=Array(HOLES).fill(false);
+  for(let i=0;i<HOLES;i++){
+    const h=document.createElement('div'); h.className='wm-hole'; h.dataset.i=i;
+    h.innerHTML='<div class="wm-mole">🐹</div>';
+    h.onclick=()=>whack(i,h);
+    g.appendChild(h);
+  }
+}
+function startGame(){
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('start-btn').style.display='none';
+  build();
+  score=0; timeLeft=30; running=true;
+  document.getElementById('score').textContent=0;
+  document.getElementById('best').textContent=best;
+  document.getElementById('time').textContent=30;
+  sfx('start');
+  clearInterval(tickTimer); clearTimeout(popTimer);
+  tickTimer=setInterval(tick,1000);
+  schedulePop();
+}
+function tick(){
+  timeLeft--; document.getElementById('time').textContent=timeLeft;
+  if(timeLeft<=0) endGame();
+}
+function schedulePop(){
+  if(!running) return;
+  const delay=450+Math.random()*650;
+  popTimer=setTimeout(()=>{
+    const holes=document.querySelectorAll('.wm-hole');
+    const free=[...holes].filter(h=>!h.classList.contains('up'));
+    if(free.length){
+      const h=free[0|Math.random()*free.length];
+      h.classList.add('up'); active[+h.dataset.i]=true;
+      const stay=600+Math.random()*700;
+      setTimeout(()=>{ h.classList.remove('up'); active[+h.dataset.i]=false; }, stay);
+    }
+    schedulePop();
+  }, delay);
+}
+function whack(i,h){
+  if(!running||!h.classList.contains('up')||!active[i]) return;
+  active[i]=false; h.classList.remove('up'); h.classList.add('bonk');
+  setTimeout(()=>h.classList.remove('bonk'),120);
+  score++; sfx('pop'); document.getElementById('score').textContent=score;
+}
+function endGame(){
+  running=false; clearInterval(tickTimer); clearTimeout(popTimer);
+  document.querySelectorAll('.wm-hole.up').forEach(h=>h.classList.remove('up'));
+  document.getElementById('start-btn').style.display='';
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='You bonked '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),200);
+}
+build();
+</script>
+</body>
+</html>

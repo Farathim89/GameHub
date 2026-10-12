@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#080808">
+<title>🎮 GAME HUB</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="themes/themes.css">
+<script src="themes/themes.js" defer></script>
+<script src="lang/lang.js" defer></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#080808;--surface:#111;--surface2:#1a1a1a;
+  --accent:#f0c040;--red:#e05050;--green:#40c0a0;--blue:#5090e0;
+  --text:#f0f0f0;--dim:#666;--border:#2a2a2a;
+}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;}
+#hub{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:24px;}
+.hub-logo{font-family:'Orbitron',monospace;font-size:clamp(32px,6vw,64px);font-weight:900;color:var(--accent);letter-spacing:6px;text-shadow:0 0 40px rgba(240,192,64,.4);text-align:center;}
+.hub-sub{font-size:14px;color:var(--dim);letter-spacing:3px;}
+.cat-lbl{font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);letter-spacing:4px;width:100%;max-width:1100px;padding-top:6px;border-bottom:1px solid var(--border);padding-bottom:6px;}
+.game-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;max-width:1100px;width:100%;}
+.gcard{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:20px 14px;cursor:pointer;transition:all .25s;text-align:center;}
+.gcard:hover{transform:translateY(-5px);}
+.gcard-icon{font-size:38px;margin-bottom:8px;}
+.gcard-name{font-family:'Orbitron',monospace;font-size:12px;font-weight:700;letter-spacing:2px;margin-bottom:5px;}
+.gcard-desc{font-size:11px;color:var(--dim);line-height:1.5;}
+#install-btn{
+  display:none;font-family:'Orbitron',monospace;font-size:12px;font-weight:700;
+  padding:10px 22px;border-radius:8px;border:2px solid var(--green);color:var(--green);
+  background:var(--surface2);cursor:pointer;letter-spacing:2px;transition:all .2s;
+}
+#install-btn:hover{background:rgba(64,192,160,.12);}
+#hub-search{font-family:'Share Tech Mono',monospace;font-size:14px;background:var(--surface);border:2px solid var(--border);color:var(--text);padding:11px 16px;border-radius:10px;outline:none;width:100%;max-width:360px;transition:border-color .2s;}
+#hub-search:focus{border-color:var(--accent);}
+#hub-search::placeholder{color:var(--dim);}
+.no-results{color:var(--dim);font-family:'Orbitron',monospace;font-size:13px;letter-spacing:2px;padding:30px;}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+.gcard{animation:cardIn .35s ease both;}
+.gcard:hover{transform:translateY(-5px)!important;}
+</style>
+</head>
+<body>
+<div id="hub">
+  <div class="hub-logo">🎮 GAME HUB</div>
+  <div class="hub-sub" id="hub-sub">CHOOSE YOUR GAME</div>
+  <input id="hub-search" type="search" placeholder="🔍 Search games…" autocomplete="off">
+  <button id="install-btn">⬇ INSTALL AS APP</button>
+  <div id="grid-area" style="width:100%;max-width:1100px;display:flex;flex-direction:column;gap:14px;align-items:center;"></div>
+</div>
+
+<script>
+const CATEGORIES = [
+  {label:'🃏 CARD GAMES', games:[
+    {icon:'♦️', name:'SOLITAIRE',  desc:'Classic Klondike — Draw 1 or 3',        color:'#e05050', file:'games/solitaire.html'},
+    {icon:'🕷️', name:'SPIDER',     desc:'Spider Solitaire — 1/2/4 suits',        color:'#40c0a0', file:'games/spider.html'},
+    {icon:'🆓', name:'FREECELL',   desc:'8 cascades, 4 free cells',              color:'#5090e0', file:'games/freecell.html'},
+    {icon:'💔', name:'HEARTS',     desc:'Avoid hearts & the Q♠ — vs 3 AI',       color:'#ff5566', file:'games/hearts.html'},
+    {icon:'🂡', name:'BLACKJACK',  desc:'Beat the dealer to 21',                 color:'#f0c040', file:'games/blackjack.html'},
+    {icon:'🃏', name:'SKIP-BO',    desc:'Race to clear your stockpile',          color:'#ff8c42', file:'games/skipbo.html'},
+    {icon:'🎴', name:'UNO',        desc:'Match colors & use action cards',       color:'#ff4466', file:'games/uno.html'},
+    {icon:'⚔️', name:'WAR',        desc:'High card wins — classic duel',         color:'#e05050', file:'games/war.html'},
+    {icon:'🎴', name:'CRAZY EIGHTS',desc:'Match rank or suit — 8s wild — vs AI', color:'#5090e0', file:'games/crazyeights.html'},
+    {icon:'🐟', name:'GO FISH',    desc:'Collect sets of four — vs AI',          color:'#40c0a0', file:'games/gofish.html'},
+    {icon:'🎰', name:'VIDEO POKER',desc:'Jacks or Better — hold & draw',         color:'#f0c040', file:'games/videopoker.html'},
+    {icon:'🔺', name:'PYRAMID',    desc:'Pair cards to 13 to clear the pyramid', color:'#f0a040', file:'games/pyramid.html'},
+    {icon:'⛰️', name:'TRIPEAKS',   desc:'Clear the peaks — one rank up or down', color:'#40c0a0', file:'games/tripeaks.html'},
+    {icon:'⛳', name:'GOLF',       desc:'Clear the course — ±1 rank runs',       color:'#40c0a0', file:'games/golf.html'},
+    {icon:'👵', name:'OLD MAID',   desc:'Don\'t get stuck with the odd card',    color:'#c080e0', file:'games/oldmaid.html'},
+    {icon:'🕐', name:'CLOCK SOLITAIRE',desc:'Luck of the draw — beat the Kings', color:'#5090e0', file:'games/clocksolitaire.html'},
+    {icon:'7️⃣', name:'SEVENS',      desc:'Build the suits from 7 — vs 3 AI',      color:'#f0c040', file:'games/sevens.html'},
+    {icon:'🪗', name:'ACCORDION',  desc:'Squeeze all 52 cards into one pile',    color:'#c080e0', file:'games/accordion.html'},
+  ]},
+  {label:'♟️ BOARD GAMES', games:[
+    {icon:'♟️', name:'CHESS',      desc:'vs AI or 2 Players — with guide mode',  color:'#5090e0', file:'games/chess.html'},
+    {icon:'🔴', name:'CHECKERS',   desc:'Forced captures & kings — vs AI',       color:'#e05050', file:'games/checkers.html'},
+    {icon:'⚫', name:'REVERSI',    desc:'Othello — vs AI or 2 Players',          color:'#c080e0', file:'games/reversi.html'},
+    {icon:'🟡', name:'4 IN A ROW', desc:'Drop discs — connect 4 to win',         color:'#fb923c', file:'games/connect4.html'},
+    {icon:'✕',  name:'NOUGHTS & ✕',desc:'Tic-Tac-Toe — 3×3 to 7×7 boards',       color:'#34d399', file:'games/connect3.html'},
+    {icon:'⚫', name:'GOMOKU',      desc:'Five in a row — vs AI or 2 Players',    color:'#c080e0', file:'games/gomoku.html'},
+    {icon:'🚢', name:'BATTLESHIP', desc:'Hunt & sink the enemy fleet — vs AI',   color:'#5090e0', file:'games/battleship.html'},
+    {icon:'⬛', name:'DOTS & BOXES',desc:'Claim boxes — vs AI or 2 Players',     color:'#f0a040', file:'games/dotsboxes.html'},
+    {icon:'⚱️', name:'MANCALA',    desc:'Sow seeds & capture — vs AI',           color:'#f0a040', file:'games/mancala.html'},
+    {icon:'🪵', name:'NIM',        desc:'Take the last stick — vs a perfect AI', color:'#e06030', file:'games/nim.html'},
+    {icon:'🪜', name:'SNAKES & LADDERS',desc:'Roll, climb & slide — vs AI or 2P',color:'#40c0a0', file:'games/snakesladders.html'},
+    {icon:'⭕', name:'NINE MENS MORRIS',desc:'Form mills & capture — vs AI',      color:'#f0a040', file:'games/ninemensmorris.html'},
+    {icon:'🁫', name:'DOMINOES',   desc:'Match the ends — vs AI',                color:'#f0a040', file:'games/dominoes.html'},
+    {icon:'✦',  name:'CHINESE CHECKERS',desc:'Hop pegs to the far corner — vs AI',color:'#c080e0', file:'games/chinesecheckers.html'},
+    {icon:'#️⃣', name:'ULTIMATE TTT',desc:'Tic-tac-toe inside tic-tac-toe — vs AI',color:'#34d399', file:'games/ultimatettt.html'},
+    {icon:'⬡',  name:'HEX',        desc:'Connect your two sides — vs AI',        color:'#e05050', file:'games/hex.html'},
+    {icon:'⚫', name:'PENTE',      desc:'5 in a row or capture 5 pairs — vs AI', color:'#c080e0', file:'games/pente.html'},
+    {icon:'❎', name:'ORDER & CHAOS',desc:'Make (or stop) 5 in a row — vs AI',   color:'#34d399', file:'games/orderchaos.html'},
+    {icon:'◉',  name:'MU TORERE',  desc:'Trap the last piece — Māori classic',   color:'#f0a040', file:'games/mutorere.html'},
+    {icon:'⛁', name:'BREAKTHROUGH', desc:'Race a pawn to the far side — vs AI',   color:'#f0c040', file:'games/breakthrough.html'},
+    {icon:'⚫', name:'KONANE',      desc:'Hawaiian checkers — jump to capture',   color:'#c080e0', file:'games/konane.html'},
+    {icon:'⚪', name:'CLOBBER',     desc:'Clobber the last enemy standing — vs AI',color:'#5090e0', file:'games/clobber.html'},
+    {icon:'⭕', name:'TAPATAN',     desc:"Three Men's Morris — slide to 3 — vs AI",color:'#40c0a0', file:'games/tapatan.html'},
+  ]},
+  {label:'🕹️ ARCADE', games:[
+    {icon:'🐍', name:'SNAKE',      desc:'Eat, grow, don\'t crash',               color:'#34d399', file:'games/snake.html'},
+    {icon:'🟦', name:'TETRIS',     desc:'Stack & clear lines — gets faster',     color:'#38bdf8', file:'games/tetris.html'},
+    {icon:'🧱', name:'BREAKOUT',   desc:'Smash every brick — paddle & ball',     color:'#e05050', file:'games/breakout.html'},
+    {icon:'🏓', name:'PONG',       desc:'Classic paddle duel — vs AI',           color:'#40c0a0', file:'games/pong.html'},
+    {icon:'🐤', name:'FLAPPY',     desc:'Tap to fly through the gaps',           color:'#f0c040', file:'games/flappy.html'},
+    {icon:'🔨', name:'WHACK-A-MOLE',desc:'Bonk the moles — beat the clock',      color:'#40c0a0', file:'games/whackamole.html'},
+    {icon:'🎵', name:'SIMON',      desc:'Repeat the colour sequence',            color:'#40c0a0', file:'games/simon.html'},
+    {icon:'🏍️', name:'TRON',       desc:'Light cycles — survive longest vs AI',  color:'#5090e0', file:'games/tron.html'},
+    {icon:'🦘', name:'DOODLE JUMP',desc:'Bounce ever higher on platforms',       color:'#40c0a0', file:'games/doodlejump.html'},
+    {icon:'👾', name:'INVADERS',   desc:'Blast the alien waves',                 color:'#40c0a0', file:'games/invaders.html'},
+    {icon:'☄️', name:'ASTEROIDS',  desc:'Rotate, thrust & shoot the rocks',      color:'#c080e0', file:'games/asteroids.html'},
+    {icon:'🐸', name:'FROGGER',    desc:'Cross road & river — dodge and ride',   color:'#34d399', file:'games/frogger.html'},
+    {icon:'🚀', name:'LUNAR LANDER',desc:'Touch down softly on the pad',         color:'#40c0a0', file:'games/lander.html'},
+    {icon:'🟡', name:'PAC-MAN',    desc:'Eat the dots — chase or flee ghosts',   color:'#f0c040', file:'games/pacman.html'},
+    {icon:'🫧', name:'BUBBLE SHOOTER',desc:'Pop 3+ matching bubbles',            color:'#c080e0', file:'games/bubbleshooter.html'},
+    {icon:'🚀', name:'MISSILE CMD', desc:'Intercept missiles — defend cities',   color:'#40c0a0', file:'games/missilecommand.html'},
+    {icon:'🐛', name:'CENTIPEDE',  desc:'Blast the splitting centipede',         color:'#40c0a0', file:'games/centipede.html'},
+    {icon:'🟪', name:'COLUMNS',    desc:'Match 3+ gems — any direction',         color:'#c080e0', file:'games/columns.html'},
+    {icon:'🦖', name:'DINO RUN',   desc:'Jump the cacti, duck the birds',        color:'#40c0a0', file:'games/dino.html'},
+    {icon:'🚁', name:'HELICOPTER', desc:'Fly through the cave — hold to rise',   color:'#f0c040', file:'games/helicopter.html'},
+    {icon:'🧺', name:'CATCH',      desc:'Catch the fruit, dodge the bombs',      color:'#40c0a0', file:'games/catch.html'},
+    {icon:'🏗️', name:'STACKER',    desc:'Stack the moving blocks to the top',    color:'#f0c040', file:'games/stacker.html'},
+    {icon:'🚀', name:'SPACE SHOOTER',desc:'Blast the swooping alien fleet',      color:'#5090e0', file:'games/spaceshooter.html'},
+    {icon:'💥', name:'TANK',        desc:'Angle, power & wind — artillery duel',  color:'#40c0a0', file:'games/tank.html'},
+    {icon:'🌠', name:'AVOIDER',    desc:'Dodge the falling blocks — survive!',   color:'#e05050', file:'games/avoider.html'},
+    {icon:'🎯', name:'AIM TRAINER',desc:'Click targets fast — 30-second rush',   color:'#e05050', file:'games/aimtrainer.html'},
+    {icon:'⚡', name:'REACTION TIME',desc:'Click the instant it turns green',     color:'#1aa84a', file:'games/reaction.html'},
+    {icon:'⌨️', name:'TYPING TEST', desc:'How many words per minute can you hit?', color:'#40c0a0', file:'games/typingtest.html'},
+    {icon:'➗', name:'QUICK MATH',  desc:'Solve as many as you can in 60s',       color:'#40c0a0', file:'games/quickmath.html'},
+    {icon:'🎨', name:'COLOR MATCH', desc:'Stroop test — word vs ink, beat the clock',color:'#c080e0', file:'games/colormatch.html'},
+  ]},
+  {label:'🧩 PUZZLE & BRAIN', games:[
+    {icon:'🔢', name:'SUDOKU',     desc:'4×4 up to 25×25 with notes & hints',    color:'#f0c040', file:'games/sudoku.html'},
+    {icon:'💣', name:'MINESWEEPER',desc:'Classic mines — flags & chords',        color:'#40c0a0', file:'games/minesweeper.html'},
+    {icon:'🔢', name:'2048',       desc:'Join tiles to reach 2048',              color:'#f0c040', file:'games/2048.html'},
+    {icon:'🀄', name:'MAHJONG',    desc:'Tile-matching solitaire — turtle',      color:'#40c0a0', file:'games/mahjong.html'},
+    {icon:'🧠', name:'MEMORY',     desc:'Flip pairs — vs AI or 2 Players',       color:'#f472b6', file:'games/memory.html'},
+    {icon:'🧩', name:'SLIDE PUZZLE',desc:'Order the tiles — 3×3 to 5×5',         color:'#5090e0', file:'games/slidepuzzle.html'},
+    {icon:'💡', name:'LIGHTS OUT', desc:'Switch every light off',                color:'#f0c040', file:'games/lightsout.html'},
+    {icon:'🎨', name:'FLOOD IT',   desc:'Flood the board to one colour',         color:'#c080e0', file:'games/floodit.html'},
+    {icon:'🗼', name:'HANOI',      desc:'Move the tower, disk by disk',          color:'#f0a040', file:'games/hanoi.html'},
+    {icon:'🎯', name:'MASTERMIND', desc:'Crack the hidden colour code',          color:'#40c0a0', file:'games/mastermind.html'},
+    {icon:'🌀', name:'MAZE',       desc:'Find your way to the goal',             color:'#40c0a0', file:'games/maze.html'},
+    {icon:'🧪', name:'WATER SORT', desc:'Pour to sort the colours',             color:'#5090e0', file:'games/watersort.html'},
+    {icon:'🎪', name:'HANGMAN',    desc:'Guess the word before it\'s too late',  color:'#e05050', file:'games/hangman.html'},
+    {icon:'🔎', name:'WORD SEARCH',desc:'Find the hidden words',                 color:'#f0c040', file:'games/wordsearch.html'},
+    {icon:'📦', name:'SOKOBAN',    desc:'Push the boxes onto the targets',       color:'#f0a040', file:'games/sokoban.html'},
+    {icon:'🖼️', name:'NONOGRAM',   desc:'Paint by numbers — reveal the picture', color:'#40c0a0', file:'games/nonogram.html'},
+    {icon:'🟠', name:'PEG SOLITAIRE',desc:'Jump pegs — leave just one',          color:'#f0c040', file:'games/pegsolitaire.html'},
+    {icon:'🧱', name:'KLOTSKI',    desc:'Slide blocks to free the red one',      color:'#e05050', file:'games/klotski.html'},
+    {icon:'💎', name:'GEM MATCH',  desc:'Swap to match 3+ — cascades & combos',  color:'#c080e0', file:'games/match3.html'},
+    {icon:'🚗', name:'RUSH HOUR',  desc:'Slide cars to free the red one',        color:'#e05050', file:'games/rushhour.html'},
+    {icon:'🚰', name:'PIPES',      desc:'Rotate tiles to connect the network',   color:'#40c0a0', file:'games/pipes.html'},
+    {icon:'🌈', name:'FLOW',       desc:'Connect the dots, fill the grid',       color:'#c080e0', file:'games/flow.html'},
+    {icon:'◐',  name:'BINAIRO',    desc:'Binary logic — balance the grid',       color:'#f0a040', file:'games/binairo.html'},
+    {icon:'⬛', name:'HITORI',     desc:'Shade duplicates — keep it connected',  color:'#f0a040', file:'games/hitori.html'},
+    {icon:'⟨⟩', name:'FUTOSHIKI',  desc:'Latin square with < > clues',           color:'#f0a040', file:'games/futoshiki.html'},
+    {icon:'3️⃣', name:'THREES',     desc:'Slide & merge — 1+2, then doubles',     color:'#5090e0', file:'games/threes.html'},
+    {icon:'🔤', name:'WORD GUESS', desc:'Crack the 5-letter word in 6 tries',    color:'#40c0a0', file:'games/wordguess.html'},
+    {icon:'🔀', name:'ANAGRAM',    desc:'Unscramble the hidden word',            color:'#f0c040', file:'games/anagram.html'},
+    {icon:'🔐', name:'CRYPTOGRAM', desc:'Decode the substitution cipher',        color:'#c080e0', file:'games/cryptogram.html'},
+    {icon:'✖️', name:'KENKEN',      desc:'Latin square with arithmetic cages',    color:'#f0a040', file:'games/kenken.html'},
+    {icon:'🪜', name:'WORD LADDER', desc:'Change one letter at a time',           color:'#40c0a0', file:'games/wordladder.html'},
+    {icon:'🔺', name:'HIDATO',     desc:'Fill the path — consecutive numbers',   color:'#5090e0', file:'games/hidato.html'},
+    {icon:'▭',  name:'SHIKAKU',    desc:'Split the grid into number rectangles', color:'#40c0a0', file:'games/shikaku.html'},
+    {icon:'🏙️', name:'SKYSCRAPERS', desc:'Place towers to match the skyline clues',color:'#5090e0', file:'games/skyscrapers.html'},
+    {icon:'🔳', name:'MAGIC SQUARE',desc:'Make every row, column & diagonal match',color:'#f0c040', file:'games/magicsquare.html'},
+    {icon:'🁢', name:'DOMINOSA',   desc:'Find the full set of dominoes',          color:'#f0a040', file:'games/dominosa.html'},
+    {icon:'🔢', name:'NUMBER MEMORY',desc:'Recall the growing number',             color:'#5090e0', file:'games/numbermemory.html'},
+    {icon:'🧠', name:'VISUAL MEMORY',desc:'Remember the tiles that lit up',        color:'#5090e0', file:'games/visualmemory.html'},
+    {icon:'🔁', name:'SEQUENCE MEMORY',desc:'Repeat the ever-longer sequence',      color:'#40c0e0', file:'games/sequencememory.html'},
+    {icon:'🐵', name:'CHIMP TEST',  desc:'Click hidden numbers in order',          color:'#f0a040', file:'games/chimptest.html'},
+  ]},
+  {label:'🎰 CASINO & LUCK', games:[
+    {icon:'🎲', name:'YATZY',      desc:'Classic & Maxi — 5 or 6 dice',          color:'#f0c040', file:'games/yatzy.html'},
+    {icon:'🎲', name:'FARKLE',     desc:'Press your luck with the dice — vs AI', color:'#f0c040', file:'games/farkle.html'},
+    {icon:'🐷', name:'PIG',        desc:'Push your luck with one die — vs AI',   color:'#f0c040', file:'games/pig.html'},
+    {icon:'⚓', name:'SHIP CAPT CREW',desc:'Dice — 6, 5, 4 then cargo — vs AI',   color:'#5090e0', file:'games/shipcaptaincrew.html'},
+    {icon:'🎲', name:'MEXICO',     desc:'Dice duel — Mexico beats all — vs AI',  color:'#f0a040', file:'games/mexico.html'},
+    {icon:'🎲', name:"LIAR'S DICE",desc:'Bluff & call — last dice standing',     color:'#c080e0', file:'games/liarsdice.html'},
+    {icon:'🎲', name:'CRAPS',      desc:'Pass line — point vs seven',            color:'#e05050', file:'games/craps.html'},
+    {icon:'✊', name:'ROCK PAPER SCISSORS',desc:'Best of nine — vs AI',          color:'#f0a040', file:'games/rps.html'},
+    {icon:'🔼', name:'HIGHER OR LOWER',desc:'Guess the next card — build a streak',color:'#f0c040', file:'games/highlow.html'},
+    {icon:'🎰', name:'SLOT MACHINE',desc:'Spin the reels — match for the jackpot',color:'#f0c040', file:'games/slots.html'},
+    {icon:'🎡', name:'ROULETTE',   desc:'Bet red, black, odds & dozens',         color:'#e05050', file:'games/roulette.html'},
+    {icon:'🎱', name:'KENO',       desc:'Pick your numbers — match the draw',    color:'#40c0a0', file:'games/keno.html'},
+    {icon:'🎟️', name:'BINGO',       desc:'Daub a line first — vs AI',             color:'#f0c040', file:'games/bingo.html'},
+  ]},
+];
+
+const area = document.getElementById('grid-area');
+const TOTAL = CATEGORIES.reduce((n,c)=>n+c.games.length,0);
+document.getElementById('hub-sub').textContent = TOTAL + ' GAMES · CHOOSE YOUR GAME';
+
+const sections = [];
+let cardN = 0;
+CATEGORIES.forEach(cat => {
+  const lbl = document.createElement('div');
+  lbl.className = 'cat-lbl';
+  lbl.textContent = cat.label;
+  area.appendChild(lbl);
+  const grid = document.createElement('div');
+  grid.className = 'game-grid';
+  const cards = [];
+  cat.games.forEach(g => {
+    const el = document.createElement('div');
+    el.className = 'gcard';
+    el.style.animationDelay = Math.min(cardN*18, 700) + 'ms'; cardN++;
+    el.dataset.search = (g.name + ' ' + g.desc).toLowerCase();
+    el.innerHTML = `<div class="gcard-icon">${g.icon}</div><div class="gcard-name" style="color:${g.color}">${g.name}</div><div class="gcard-desc">${g.desc}</div>`;
+    el.addEventListener('mouseenter',()=>{ el.style.borderColor=g.color; el.style.boxShadow=`0 8px 30px ${g.color}33`; });
+    el.addEventListener('mouseleave',()=>{ el.style.borderColor=''; el.style.boxShadow=''; });
+    el.onclick = () => window.location.href = g.file;
+    grid.appendChild(el);
+    cards.push(el);
+  });
+  area.appendChild(grid);
+  sections.push({ lbl, grid, cards });
+});
+
+/* ── live search filter ── */
+const search = document.getElementById('hub-search');
+let noRes = null;
+search.addEventListener('input', () => {
+  const q = search.value.trim().toLowerCase();
+  let shown = 0;
+  sections.forEach(sec => {
+    let any = false;
+    sec.cards.forEach(c => { const m = !q || c.dataset.search.includes(q); c.hidden = !m; if(m){any=true;shown++;} });
+    sec.lbl.hidden = !any; sec.grid.hidden = !any;
+  });
+  if (!noRes) { noRes = document.createElement('div'); noRes.className = 'no-results'; noRes.textContent = 'No games match your search.'; area.appendChild(noRes); }
+  noRes.hidden = shown !== 0;
+});
+
+/* ── PWA: service worker + install prompt (needs http(s)/localhost, not file://) ── */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-btn').style.display = 'inline-block';
+});
+document.getElementById('install-btn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('install-btn').style.display = 'none';
+});
+</script>
+</body>
+</html>

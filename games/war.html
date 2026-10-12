@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>War</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.wr-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:18px 12px;}
+.wr-side{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.wr-lbl{font-family:'Orbitron',monospace;font-size:13px;letter-spacing:2px;}
+.wr-count{font-family:'Orbitron',monospace;font-size:26px;font-weight:900;color:var(--accent);}
+.wr-table{display:flex;gap:40px;align-items:center;justify-content:center;flex-wrap:wrap;min-height:130px;}
+.wr-slot{display:flex;gap:6px;align-items:center;}
+.card{width:72px;height:100px;font-size:26px;}
+.card .ctop{padding:5px 7px;}
+.wr-msg{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;min-height:26px;letter-spacing:1px;text-align:center;}
+.wr-flip{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;padding:14px 34px;border-radius:10px;border:3px solid var(--accent);color:var(--accent);background:var(--surface);cursor:pointer;letter-spacing:2px;}
+.wr-flip:hover{background:rgba(240,192,64,.15);} .wr-flip:disabled{opacity:.4;cursor:default;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">⚔️ WAR</span>
+  <div class="h-btns">
+    <div class="info-pill">ROUND: <span id="round">0</span></div>
+    <label style="font-family:'Share Tech Mono';font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;"><input type="checkbox" id="auto"> AUTO</label>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="wr-wrap">
+  <div class="wr-side"><div class="wr-lbl" style="color:#5090e0">🤖 OPPONENT</div><div class="wr-count" id="oppCount">26</div></div>
+  <div class="wr-table" id="table"></div>
+  <div class="wr-msg" id="msg">Flip to start the battle!</div>
+  <div class="wr-side"><div class="wr-lbl" style="color:#f0c040">🟡 YOU</div><div class="wr-count" id="youCount">26</div></div>
+  <button class="wr-flip" id="flip" onclick="flip()">⚔️ FLIP</button>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='war';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+let you=[], opp=[], round=0, over=false, autoTimer=null;
+
+function newGame(){
+  over=false; round=0;
+  clearInterval(autoTimer); autoTimer=null;
+  document.getElementById('win-overlay').classList.remove('show');
+  let deck=[];
+  for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({r,s});
+  for(let i=deck.length-1;i>0;i--){const j=0|Math.random()*(i+1);[deck[i],deck[j]]=[deck[j],deck[i]];}
+  you=deck.slice(0,26); opp=deck.slice(26);
+  document.getElementById('msg').textContent='Flip to start the battle!';
+  document.getElementById('table').innerHTML='';
+  document.getElementById('flip').disabled=false;
+  updateCounts();
+}
+function cardHTML(c,back){
+  if(back) return '<div class="card back"></div>';
+  const red=c.s===1||c.s===2;
+  return '<div class="card '+(red?'red':'black')+'"><div class="ctop"><span class="crank">'+RANKS[c.r]+'</span><span class="csuit">'+SUITS[c.s]+'</span></div><div class="cmid">'+SUITS[c.s]+'</div></div>';
+}
+function flip(){
+  if(over) return;
+  if(!you.length||!opp.length) return endGame();
+  round++;
+  const spoils=[];
+  let yc, oc, warCount=0, outcome='';
+  // resolve the whole battle (including any wars) in one shot
+  while(true){
+    if(!you.length||!opp.length) break;
+    yc=you.shift(); oc=opp.shift();
+    spoils.push(yc,oc);
+    if(yc.r>oc.r){ you.push(...shuffle(spoils)); outcome='you'; break; }
+    else if(oc.r>yc.r){ opp.push(...shuffle(spoils)); outcome='opp'; break; }
+    else { // tie -> WAR: up to 3 cards face down each (keep 1 for the decider)
+      warCount++;
+      for(let k=0;k<3;k++){ if(you.length>1)spoils.push(you.shift()); if(opp.length>1)spoils.push(opp.shift()); }
+      if(!you.length||!opp.length){ // cannot finish the war -> split the pile to whoever can play
+        if(you.length>=opp.length) you.push(...spoils); else opp.push(...spoils);
+        outcome='split'; break;
+      }
+    }
+  }
+  sfx(warCount?'coin':'flip');
+  document.getElementById('table').innerHTML='<div class="wr-slot">'+cardHTML(oc)+'</div><div class="wr-slot">'+cardHTML(yc)+'</div>';
+  document.getElementById('table').querySelectorAll('.card').forEach(function(c,i){ c.classList.add('gh-flip'); c.style.animationDelay=(i*90)+'ms'; });
+  const pre = warCount? '⚔️ WAR! ' : '';
+  if(outcome==='you') setMsg(pre+'You win '+spoils.length+' cards!','#40c0a0');
+  else if(outcome==='opp') setMsg(pre+'Opponent wins '+spoils.length+' cards.','#e05050');
+  else setMsg('War could not finish — pile split.','#f0c040');
+  updateCounts();
+  if(!you.length||!opp.length) endGame();
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
+function setMsg(t,c){ const m=document.getElementById('msg'); m.textContent=t; m.style.color=c||'var(--accent)'; }
+function updateCounts(){
+  document.getElementById('youCount').textContent=you.length;
+  document.getElementById('oppCount').textContent=opp.length;
+  document.getElementById('round').textContent=round;
+}
+function autoOn(){ return document.getElementById('auto').checked; }
+function endGame(){
+  over=true; clearInterval(autoTimer); autoTimer=null;
+  document.getElementById('flip').disabled=true;
+  updateCounts();
+  const youWin=you.length>opp.length;
+  document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 OPPONENT WINS!';
+  document.getElementById('win-sub').textContent='After '+round+' rounds';
+  if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+document.getElementById('auto').addEventListener('change',function(){
+  if(this.checked && !over){ autoTimer=setInterval(()=>{ if(over){clearInterval(autoTimer);return;} flip(); }, 450); }
+  else { clearInterval(autoTimer); autoTimer=null; }
+});
+newGame();
+</script>
+</body>
+</html>

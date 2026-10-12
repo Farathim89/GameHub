@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anagram</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ag-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:20px 12px;}
+.ag-answer{display:flex;gap:6px;min-height:58px;flex-wrap:wrap;justify-content:center;}
+.ag-pool{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:460px;}
+.ag-tile{width:48px;height:54px;border-radius:8px;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:24px;cursor:pointer;transition:transform .1s;}
+.ag-tile:hover{transform:translateY(-4px);}
+.ag-tile.used{opacity:.25;pointer-events:none;}
+.ag-tile.ans{background:var(--surface3);border-color:var(--accent);}
+.ag-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:22px;letter-spacing:1px;}
+.ag-ctrls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🔀 ANAGRAM</span>
+  <div class="h-btns"><div class="info-pill">SCORE: <span id="score">0</span></div><div class="info-pill">STREAK: <span id="streak">0</span></div><button class="hbtn" onclick="newWord()">SKIP</button></div>
+</div>
+<div class="ag-wrap">
+  <div class="ag-msg" id="msg">Unscramble the letters!</div>
+  <div class="ag-answer" id="answer"></div>
+  <div class="ag-pool" id="pool"></div>
+  <div class="ag-ctrls">
+    <button class="hbtn" onclick="clearAns()">↩ CLEAR</button>
+    <button class="hbtn" onclick="hint()">💡 HINT</button>
+    <button class="hbtn" onclick="submit()" style="border-color:var(--green);color:var(--green)">✓ SUBMIT</button>
+  </div>
+</div>
+<script>
+const GAME='anagram';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const WORDS="PLANET GARDEN ORANGE MACHINE LIBRARY DIAMOND JOURNEY KITCHEN MOUNTAIN ELEPHANT CAPTAIN RAINBOW TREASURE MYSTERY HARMONY VICTORY FESTIVAL CHAMPION ADVENTURE KEYBOARD DOLPHIN PYRAMID VOLCANO GALAXY COMPUTER SANDWICH BIRTHDAY CHOCOLATE UMBRELLA BUTTERFLY WHISPER CRYSTAL THUNDER MARKET PENGUIN GIRAFFE COMPASS LANTERN MEADOW ORCHARD".split(' ');
+let word='', pool=[], answer=[], score=0, streak=0;
+function newWord(){ word=WORDS[0|Math.random()*WORDS.length]; let s; do{ s=shuffle(word.split('')); }while(s.join('')===word); pool=s.map((ch,i)=>({ch,used:false,id:i})); answer=[];
+  document.getElementById('score').textContent=score; document.getElementById('streak').textContent=streak; setMsg('Unscramble the '+word.length+'-letter word!'); render(); }
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function setMsg(t,c){ const m=document.getElementById('msg'); m.textContent=t; m.style.color=c||'var(--text)'; }
+function render(){
+  const p=document.getElementById('pool'); p.innerHTML='';
+  pool.forEach(t=>{ const d=document.createElement('div'); d.className='ag-tile'+(t.used?' used':''); d.textContent=t.ch; d.onclick=()=>pick(t.id); p.appendChild(d); });
+  const a=document.getElementById('answer'); a.innerHTML='';
+  answer.forEach((t,i)=>{ const d=document.createElement('div'); d.className='ag-tile ans'; d.textContent=t.ch; d.onclick=()=>unpick(i); a.appendChild(d); });
+  for(let i=answer.length;i<word.length;i++){ const d=document.createElement('div'); d.className='ag-tile'; d.style.opacity='.3'; a.appendChild(d); }
+}
+function pick(id){ const t=pool.find(x=>x.id===id); if(!t||t.used)return; t.used=true; answer.push(t); sfx('select'); render(); }
+function unpick(i){ const t=answer.splice(i,1)[0]; t.used=false; render(); }
+function clearAns(){ answer.forEach(t=>t.used=false); answer=[]; render(); }
+function hint(){ const next=word[answer.length]; const t=pool.find(x=>!x.used&&x.ch===next); if(t){ pick(t.id); } }
+function submit(){
+  const guess=answer.map(t=>t.ch).join('');
+  if(guess===word){ score+=word.length*10; streak++; sfx('win'); setMsg('✅ Correct! +'+(word.length*10),'var(--green)');
+    if(window.GH){GH.score.best(GAME,'best',score,'high');GH.score.set(GAME,'streak',Math.max(streak,GH.score.get(GAME,'streak')||0));}
+    document.getElementById('score').textContent=score; document.getElementById('streak').textContent=streak; setTimeout(newWord,1000); }
+  else { streak=0; sfx('error'); setMsg('❌ Not quite — try again','var(--red)'); document.getElementById('streak').textContent=0; }
+}
+document.addEventListener('keydown',e=>{ const c=e.key.toUpperCase(); if(c>='A'&&c<='Z'&&c.length===1){ const t=pool.find(x=>!x.used&&x.ch===c); if(t)pick(t.id); } else if(e.key==='Backspace'){ if(answer.length)unpick(answer.length-1); } else if(e.key==='Enter')submit(); });
+newWord();
+</script>
+</body>
+</html>

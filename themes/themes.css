@@ -1,0 +1,171 @@
+/* ============================================================
+   GAME HUB — THEMES
+   Backgrounds, card styles & accent palettes.
+   Active theme is set as  <html data-theme="...">  by themes.js
+   Add your own images to /backgrounds and reference them here.
+   ============================================================ */
+
+:root{
+  color-scheme: dark; /* tells Chrome NOT to auto-invert (force-dark protection) */
+  /* card defaults (Classic Dark) */
+  --card-front:#f5f0e8;
+  --card-red-ink:#cc1122;
+  --card-black-ink:#111111;
+  --card-back-a:#1a3a6a;
+  --card-back-b:#0d2040;
+  --card-back-border:#2a5aaa;
+  --felt:#0d1a12;
+}
+
+/* ---------- CASINO FELT ---------- */
+html[data-theme="felt"]{
+  --bg:#07140c; --surface:#0c2014; --surface2:#12301e; --surface3:#1a4028;
+  --accent:#f0c040; --border:#1d4a2c; --dim:#6f8f7a;
+  --card-front:#faf7ee; --card-red-ink:#c01020; --card-black-ink:#101010;
+  --card-back-a:#8a1520; --card-back-b:#5a0d15; --card-back-border:#c04050;
+  --felt:#0a3a1e;
+}
+html[data-theme="felt"] body{
+  background:radial-gradient(ellipse at 50% 30%, #14562e 0%, #0a3a1e 55%, #052514 100%) fixed;
+}
+
+/* ---------- WOODEN TABLE ---------- */
+html[data-theme="wood"]{
+  --bg:#1a0f08; --surface:#241408; --surface2:#33200f; --surface3:#442c16;
+  --accent:#e8a84a; --border:#4a301a; --dim:#9a7a5a;
+  --card-front:#f8f2e2; --card-red-ink:#b01818; --card-black-ink:#1a120a;
+  --card-back-a:#6a4a20; --card-back-b:#3a2810; --card-back-border:#a07030;
+  --felt:#2a1a0c;
+}
+html[data-theme="wood"] body{
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.14) 0 2px, transparent 2px 90px),
+    linear-gradient(180deg,#3a2410 0%, #24160a 60%, #170e06 100%) fixed;
+}
+
+/* ---------- NEON ARCADE ---------- */
+html[data-theme="neon"]{
+  --bg:#0a0618; --surface:#140c28; --surface2:#1e1238; --surface3:#2a1a4a;
+  --accent:#00e5ff; --red:#ff3d81; --green:#39ffb0; --blue:#7c6cff;
+  --border:#382a5e; --dim:#8a7ab8;
+  --card-front:#eef2ff; --card-red-ink:#e0106a; --card-black-ink:#160a30;
+  --card-back-a:#3a1a7a; --card-back-b:#1a0a40; --card-back-border:#7c6cff;
+  --felt:#120a2a;
+}
+html[data-theme="neon"] body{
+  background:
+    radial-gradient(circle at 15% 15%, rgba(124,108,255,.22) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(0,229,255,.16) 0%, transparent 45%),
+    #0a0618 fixed;
+}
+
+/* ---------- MIDNIGHT BLUE ---------- */
+html[data-theme="midnight"]{
+  --bg:#060c1a; --surface:#0b1526; --surface2:#122036; --surface3:#1a2c4a;
+  --accent:#5ab0ff; --border:#22385e; --dim:#5a7aa0;
+  --card-front:#f2f6fc; --card-red-ink:#d02030; --card-black-ink:#0a1220;
+  --card-back-a:#14406a; --card-back-b:#0a2038; --card-back-border:#3a80c0;
+  --felt:#0a1830;
+}
+html[data-theme="midnight"] body{
+  background:linear-gradient(180deg,#0a1630 0%, #060c1a 70%, #04080f 100%) fixed;
+}
+
+/* ---------- MY WALLPAPER (backgrounds/wallpaper.png) ---------- */
+html[data-theme="wallpaper"]{
+  --surface:rgba(10,10,14,.82); --surface2:rgba(24,24,30,.85); --surface3:rgba(38,38,46,.88);
+  --border:#3a3a44;
+}
+html[data-theme="wallpaper"] body{
+  background:#080808 url("../backgrounds/wallpaper.png") center/cover no-repeat fixed;
+}
+/* hub page lives at root, so path differs */
+html[data-theme="wallpaper"] body.at-root{
+  background:#080808 url("backgrounds/wallpaper.png") center/cover no-repeat fixed;
+}
+
+/* ============================================================
+   TEXTURES — subtle, theme-aware, pure-CSS (no image files).
+   A fixed full-screen layer behind all content.
+   ============================================================ */
+body::before{
+  content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  /* default: fine dotted weave for the dark themes */
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.035) 1px, transparent 1.6px),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.02) 1px, transparent 1.6px);
+  background-size:18px 18px, 32px 32px;
+  background-position:0 0, 9px 9px;
+}
+/* Casino felt — woven fabric cross-hatch */
+html[data-theme="felt"] body::before{
+  background-image:
+    repeating-linear-gradient(45deg, rgba(0,0,0,.10) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.035) 0 1px, transparent 1px 5px);
+  background-size:6px 6px, 6px 6px;
+}
+/* Wood — fine horizontal grain over the planks */
+html[data-theme="wood"] body::before{
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg, rgba(255,220,170,.04) 0 1px, transparent 1px 7px);
+  background-size:100% 3px, 100% 7px;
+}
+/* Neon arcade — glowing grid */
+html[data-theme="neon"] body::before{
+  background-image:
+    linear-gradient(rgba(0,229,255,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,108,255,.06) 1px, transparent 1px);
+  background-size:30px 30px, 30px 30px;
+}
+/* Midnight — scattered starfield */
+html[data-theme="midnight"] body::before{
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.5) 0.7px, transparent 1px),
+    radial-gradient(circle, rgba(160,200,255,.35) 0.7px, transparent 1px),
+    radial-gradient(circle, rgba(255,255,255,.25) 0.6px, transparent 1px);
+  background-size:120px 120px, 170px 170px, 90px 90px;
+  background-position:12px 30px, 80px 100px, 50px 70px;
+  opacity:.6;
+}
+/* Wallpaper — keep the photo clean, just the faintest grain */
+html[data-theme="wallpaper"] body::before{
+  background-image:radial-gradient(circle, rgba(255,255,255,.03) 1px, transparent 1.6px);
+  background-size:26px 26px;
+}
+
+/* ============================================================
+   THEME PICKER (injected by themes.js)
+   ============================================================ */
+#theme-fab{
+  position:fixed; right:16px; bottom:16px; z-index:9000;
+  width:46px; height:46px; border-radius:50%;
+  background:var(--surface2,#1a1a1a); border:2px solid var(--border,#2a2a2a);
+  color:var(--text,#f0f0f0); font-size:20px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 16px rgba(0,0,0,.5); transition:all .2s;
+}
+#theme-fab:hover{ border-color:var(--accent,#f0c040); transform:scale(1.08); }
+
+#theme-overlay{
+  display:none; position:fixed; inset:0; z-index:9500;
+  background:rgba(0,0,0,.75); align-items:center; justify-content:center; padding:20px;
+}
+#theme-overlay.show{ display:flex; }
+#theme-panel{
+  background:var(--surface,#111); border:2px solid var(--border,#2a2a2a);
+  border-radius:16px; padding:24px; max-width:520px; width:100%;
+}
+#theme-panel h3{
+  font-family:'Orbitron',monospace; letter-spacing:3px; color:var(--accent,#f0c040);
+  margin-bottom:16px; font-size:16px; text-align:center;
+}
+.theme-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+.theme-opt{
+  border:2px solid var(--border,#2a2a2a); border-radius:10px; padding:10px;
+  cursor:pointer; text-align:center; transition:all .2s; background:var(--surface2,#1a1a1a);
+}
+.theme-opt:hover{ transform:translateY(-3px); border-color:var(--accent,#f0c040); }
+.theme-opt.active{ border-color:var(--accent,#f0c040); box-shadow:0 0 0 2px var(--accent,#f0c040) inset; }
+.theme-swatch{ height:44px; border-radius:6px; margin-bottom:8px; border:1px solid rgba(255,255,255,.15); }
+.theme-name{ font-family:'Orbitron',monospace; font-size:11px; letter-spacing:1px; color:var(--text,#f0f0f0); }

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nonogram</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ng-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+.ng-board{border-collapse:collapse;user-select:none;touch-action:none;}
+.ng-board td{border:1px solid #333;text-align:center;vertical-align:middle;padding:0;}
+.ng-corner{background:transparent;}
+.ng-ch{background:var(--surface);font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);vertical-align:bottom!important;line-height:1.15;padding:2px!important;}
+.ng-rh{background:var(--surface);font-family:'Orbitron',monospace;font-size:12px;color:var(--dim);text-align:right!important;padding:0 6px!important;white-space:nowrap;}
+.ng-cell{cursor:pointer;background:var(--surface2);}
+.ng-cell.fill{background:#2a2a34;}
+.ng-cell.fill.on{background:var(--accent);}
+.ng-cell.mark{color:var(--red);font-weight:700;}
+.ng-cell.err{background:rgba(224,80,80,.4)!important;}
+.ng-mode{display:flex;gap:10px;align-items:center;}
+.ng-mode button{font-family:'Orbitron',monospace;font-size:13px;padding:8px 14px;border-radius:8px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.ng-mode button.active{border-color:var(--accent);color:var(--accent);}
+.ng-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:460px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🖼️ NONOGRAM</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()">
+      <option value="5" selected>5×5</option>
+      <option value="10">10×10</option>
+      <option value="15">15×15</option>
+    </select>
+    <div class="info-pill">MISTAKES: <span id="mistakes">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ng-wrap">
+  <div class="ng-hint">Fill the squares that form the picture. Numbers = runs of filled cells in that row/column.</div>
+  <div class="ng-mode">
+    <button id="mFill" class="active" onclick="setMode('fill')">⬛ FILL</button>
+    <button id="mMark" onclick="setMode('mark')">✕ MARK</button>
+    <span style="font-size:11px;color:var(--dim)">(or right-click to mark)</span>
+  </div>
+  <div id="boardWrap"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='nonogram';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let N=5, sol=[], state=[], rowClues=[], colClues=[], mode='fill', mistakes=0, over=false;
+
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  over=false; mistakes=0; mode='fill'; setMode('fill');
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('mistakes').textContent=0;
+  // random solution with at least 1 filled per row/col
+  do{
+    sol=Array.from({length:N},()=>Array.from({length:N},()=>Math.random()<0.55?1:0));
+  }while(!valid());
+  state=Array.from({length:N},()=>Array(N).fill(0)); // 0 empty, 1 filled, 2 marked
+  rowClues=sol.map(row=>runs(row));
+  colClues=[]; for(let c=0;c<N;c++){ const col=[]; for(let r=0;r<N;r++)col.push(sol[r][c]); colClues.push(runs(col)); }
+  render();
+}
+function valid(){
+  for(let r=0;r<N;r++) if(!sol[r].some(v=>v)) return false;
+  for(let c=0;c<N;c++){ let any=false; for(let r=0;r<N;r++) if(sol[r][c])any=true; if(!any)return false; }
+  return true;
+}
+function runs(arr){ const out=[]; let n=0; for(const v of arr){ if(v)n++; else{ if(n)out.push(n); n=0; } } if(n)out.push(n); return out.length?out:[0]; }
+function setMode(m){ mode=m; document.getElementById('mFill').classList.toggle('active',m==='fill'); document.getElementById('mMark').classList.toggle('active',m==='mark'); }
+function maxRowClue(){ return Math.max(...rowClues.map(c=>c.length)); }
+function maxColClue(){ return Math.max(...colClues.map(c=>c.length)); }
+function render(){
+  const wrap=document.getElementById('boardWrap');
+  const csz=N<=5?44:N<=10?30:22;
+  const rcW=maxRowClue(), ccH=maxColClue();
+  let h='<table class="ng-board">';
+  // column clue rows
+  for(let k=0;k<ccH;k++){
+    h+='<tr>';
+    if(k===0) h+=`<td class="ng-corner" rowspan="${ccH}" colspan="1"></td>`;
+    for(let c=0;c<N;c++){ const cl=colClues[c]; const idx=cl.length-ccH+k; const val=idx>=0?cl[idx]:''; h+=`<td class="ng-ch" style="width:${csz}px;height:${csz*0.5}px">${val||''}</td>`; }
+    h+='</tr>';
+  }
+  for(let r=0;r<N;r++){
+    h+='<tr>';
+    h+=`<td class="ng-rh" style="height:${csz}px">${rowClues[r].join(' ')}</td>`;
+    for(let c=0;c<N;c++){
+      const s=state[r][c];
+      const cls='ng-cell'+(s===1?' fill on':'')+(s===2?' mark':'');
+      const content=s===2?'✕':'';
+      h+=`<td class="${cls}" style="width:${csz}px;height:${csz}px;font-size:${csz*0.5}px" data-r="${r}" data-c="${c}">${content}</td>`;
+    }
+    h+='</tr>';
+  }
+  h+='</table>';
+  wrap.innerHTML=h;
+  wrap.querySelectorAll('.ng-cell').forEach(td=>{
+    td.addEventListener('click',()=>cellAction(+td.dataset.r,+td.dataset.c,mode));
+    td.addEventListener('contextmenu',e=>{e.preventDefault();cellAction(+td.dataset.r,+td.dataset.c,'mark');});
+  });
+}
+function cellAction(r,c,act){
+  if(over) return;
+  if(act==='fill'){
+    if(state[r][c]===1){ state[r][c]=0; }
+    else {
+      if(sol[r][c]===1){ state[r][c]=1; sfx('place'); }
+      else { mistakes++; document.getElementById('mistakes').textContent=mistakes; state[r][c]=2; sfx('error'); }
+    }
+  } else { state[r][c]=state[r][c]===2?0:2; sfx('select'); }
+  render();
+  if(won()) win();
+}
+function won(){
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ if(sol[r][c]===1 && state[r][c]!==1) return false; }
+  return true;
+}
+function win(){
+  over=true;
+  if(window.GH){ GH.score.inc(GAME,'wins',1); GH.score.best(GAME,'bestMistakes_'+N,mistakes,'low'); }
+  document.getElementById('win-sub').textContent='Picture complete with '+mistakes+' mistake'+(mistakes===1?'':'s')+'!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+newGame();
+</script>
+</body>
+</html>

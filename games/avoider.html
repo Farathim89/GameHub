@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Avoider</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.av-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 10px;}
+#avoid{background:linear-gradient(180deg,#12101c,#07060c);border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.av-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">🌠 AVOIDER</span>
+  <div class="h-btns"><div class="info-pill">SCORE: <span id="score">0</span></div><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="av-wrap">
+  <div class="av-hint">Move with <b>mouse / touch / ← →</b>. Dodge the falling blocks — survive as long as you can!</div>
+  <canvas id="avoid" width="420" height="500"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 HIT!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='avoider';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('avoid'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height;
+let player, blocks, score, best, speed, over, raf, spawnT, left, right, tick;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+function newGame(){ player={x:W/2-18,y:H-34,w:36,h:20}; blocks=[]; score=0; speed=3; over=false; spawnT=0; left=right=false; tick=0;
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop); }
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){ tick++;
+  if(left)player.x-=6; if(right)player.x+=6; player.x=Math.max(0,Math.min(W-player.w,player.x));
+  score+=0.1; speed=3+score*0.02;
+  spawnT--; if(spawnT<=0){ spawnT=Math.max(8,22-score*0.12); const w=20+Math.random()*50; blocks.push({x:Math.random()*(W-w),y:-24,w,h:16+Math.random()*16,vy:speed+Math.random()*2,c:['#e05050','#f0a040','#c080e0'][0|Math.random()*3]}); }
+  blocks.forEach(b=>b.y+=b.vy); blocks=blocks.filter(b=>b.y<H+30);
+  for(const b of blocks){ if(player.x<b.x+b.w && player.x+player.w>b.x && player.y<b.y+b.h && player.y+player.h>b.y) return gameOver(); }
+  document.getElementById('score').textContent=Math.floor(score);
+}
+function draw(){ ctx.clearRect(0,0,W,H);
+  blocks.forEach(b=>{ ctx.fillStyle=b.c; ctx.fillRect(b.x,b.y,b.w,b.h); ctx.fillStyle='rgba(255,255,255,.2)'; ctx.fillRect(b.x,b.y,b.w,4); });
+  ctx.fillStyle='#40c0e0'; ctx.fillRect(player.x,player.y,player.w,player.h); ctx.fillStyle='rgba(255,255,255,.3)'; ctx.fillRect(player.x,player.y,player.w,5);
+}
+function gameOver(){ over=true; const sc=Math.floor(score); const r=window.GH?GH.score.best(GAME,'best',sc,'high'):{value:sc,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Survived '+sc+(r.isBest&&sc>0?' — NEW BEST! 🎉':' · Best '+best); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250); }
+function moveTo(cx){ const rect=cv.getBoundingClientRect(); player.x=(cx-rect.left)*(W/rect.width)-player.w/2; player.x=Math.max(0,Math.min(W-player.w,player.x)); }
+cv.addEventListener('mousemove',e=>moveTo(e.clientX));
+cv.addEventListener('touchmove',e=>{e.preventDefault();moveTo(e.touches[0].clientX);},{passive:false});
+document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'||e.key==='a'){left=true;e.preventDefault();} if(e.key==='ArrowRight'||e.key==='d'){right=true;e.preventDefault();} });
+document.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft'||e.key==='a')left=false; if(e.key==='ArrowRight'||e.key==='d')right=false; });
+newGame();
+</script>
+</body>
+</html>

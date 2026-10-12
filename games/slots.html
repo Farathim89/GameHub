@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slot Machine</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.sl-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:22px 12px;}
+.sl-credit{font-family:'Orbitron',monospace;font-size:20px;}.sl-credit b{color:#f0c040;font-size:28px;}
+.sl-machine{background:linear-gradient(180deg,#3a2550,#1a1030);padding:18px;border-radius:16px;border:3px solid #f0c040;box-shadow:0 8px 30px rgba(0,0,0,.5);}
+.sl-reels{display:flex;gap:10px;}
+.reel{width:84px;height:100px;background:#faf6ea;border-radius:10px;overflow:hidden;position:relative;border:2px solid #222;}
+.reel .strip{position:absolute;left:0;width:100%;display:flex;flex-direction:column;align-items:center;}
+.sym{height:100px;display:flex;align-items:center;justify-content:center;font-size:54px;}
+.sl-msg{font-family:'Orbitron',monospace;font-size:16px;min-height:26px;letter-spacing:1px;text-align:center;}
+.sl-bet{display:flex;align-items:center;gap:10px;font-family:'Orbitron',monospace;}
+.sl-bet button{width:34px;height:34px;border-radius:8px;border:2px solid var(--border);background:var(--surface);color:var(--fg);font-size:18px;cursor:pointer;}
+.sl-spin{font-family:'Orbitron',monospace;font-size:18px;font-weight:800;padding:14px 40px;border-radius:12px;border:3px solid var(--green);color:#0a140a;background:var(--green);cursor:pointer;letter-spacing:2px;}
+.sl-spin:disabled{opacity:.5;cursor:default}
+.sl-pay{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🎰 SLOT MACHINE</span>
+  <div class="h-btns"><button class="hbtn" onclick="reset()">RESET</button></div>
+</div>
+<div class="sl-wrap">
+  <div class="sl-credit">CREDITS: <b id="credit">100</b></div>
+  <div class="sl-machine"><div class="sl-reels"><div class="reel" id="r0"></div><div class="reel" id="r1"></div><div class="reel" id="r2"></div></div></div>
+  <div class="sl-msg" id="msg">Set your bet and spin!</div>
+  <div class="sl-bet"><span>BET</span><button onclick="bet(-5)">−</button><b id="betv">10</b><button onclick="bet(5)">+</button></div>
+  <button class="sl-spin" id="spin" onclick="spin()">🎰 SPIN</button>
+  <div class="sl-pay">🍒🍒🍒 ×5 · 🍋×3 ×8 · 🔔×3 ×12 · ⭐×3 ×20 · 7️⃣×3 ×50 · any two 🍒 ×2</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💸 BUSTED</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="reset()">NEW STAKE</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='slots';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SYMS=['🍒','🍋','🔔','⭐','7️⃣'];
+const WEIGHTS=[5,5,4,3,2]; // rarer = higher symbols
+const PAY3={0:5,1:8,2:12,3:20,4:50};
+let credit=100, betv=10, busy=false, over=false;
+function reset(){ credit=100; betv=10; busy=false; over=false; document.getElementById('win-overlay').classList.remove('show'); upd(); setMsg('Set your bet and spin!'); for(const id of ['r0','r1','r2'])document.getElementById(id).innerHTML='<div class="strip"><div class="sym">🍒</div></div>'; }
+function upd(){ document.getElementById('credit').textContent=credit; document.getElementById('betv').textContent=betv; document.getElementById('spin').disabled=busy||credit<betv; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function bet(d){ if(busy)return; betv=Math.max(5,Math.min(Math.max(5,credit),betv+d)); upd(); }
+function pick(){ const tot=WEIGHTS.reduce((a,b)=>a+b,0); let x=Math.random()*tot; for(let i=0;i<SYMS.length;i++){ if(x<WEIGHTS[i])return i; x-=WEIGHTS[i]; } return 0; }
+function spinReel(id,final,dur){ const el=document.getElementById(id); const strip=document.createElement('div'); strip.className='strip';
+  const seq=[]; for(let i=0;i<14;i++)seq.push(0|Math.random()*SYMS.length); seq.push(final);
+  strip.innerHTML=seq.map(s=>'<div class="sym">'+SYMS[s]+'</div>').join(''); el.innerHTML=''; el.appendChild(strip);
+  const offset=(seq.length-1)*100; strip.style.transition='none'; strip.style.transform='translateY(0)'; strip.getBoundingClientRect();
+  strip.style.transition='transform '+dur+'ms cubic-bezier(.15,.7,.2,1)'; strip.style.transform='translateY(-'+offset+'px)'; }
+function spin(){ if(busy||over||credit<betv)return; busy=true; credit-=betv; upd(); sfx('select'); setMsg('Spinning…');
+  if(window.GH)GH.chip('.sl-machine',{count:3});
+  const res=[pick(),pick(),pick()];
+  spinReel('r0',res[0],700); spinReel('r1',res[1],950); spinReel('r2',res[2],1200);
+  setTimeout(()=>{ let win=0, m;
+    if(res[0]===res[1]&&res[1]===res[2]){ win=betv*PAY3[res[0]]; m='Three '+SYMS[res[0]]+'! Win '+win+'!'; }
+    else { const cher=res.filter(s=>s===0).length; if(cher===2){ win=betv*2; m='Two 🍒 — win '+win+'!'; } else if(cher===1){ win=Math.floor(betv*0.5); m='One 🍒 — win '+win+'.'; } else { m='No match. Try again!'; } }
+    if(win>0){ credit+=win; sfx('win'); if(window.GH)GH.chip('#credit',{count:Math.min(8,2+Math.floor(win/betv)),color:'#40d070'}); } else sfx('lose');
+    upd(); setMsg(m); busy=false;
+    if(credit<5){ over=true; document.getElementById('win-sub').textContent='Out of credits after a good run.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500); }
+    else if(window.GH)GH.score.best(GAME,'best',credit,'high');
+  }, 1300);
+}
+reset();
+</script>
+</body>
+</html>

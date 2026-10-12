@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Catch</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ct-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 10px;}
+#catch{background:linear-gradient(180deg,#141c2a,#0a0f18);border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.ct-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🧺 CATCH</span>
+  <div class="h-btns"><div class="info-pill">SCORE: <span id="score">0</span></div><div class="info-pill">BEST: <span id="best">0</span></div><div class="info-pill">LIVES: <span id="lives">3</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="ct-wrap">
+  <div class="ct-hint">Move the basket with <b>mouse / touch / ← →</b>. Catch 🍎🍊⭐ — dodge 💣!</div>
+  <canvas id="catch" width="480" height="440"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='catch';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('catch'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height;
+let basket, items, score, best, lives, over, raf, spawnT, speed, left, right;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+const GOOD=['🍎','🍊','🍇','⭐','🍒'], BAD=['💣'];
+function newGame(){ basket={x:W/2-40,w:80,y:H-30}; items=[]; score=0; lives=3; over=false; spawnT=0; speed=2.4; left=right=false;
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; updateHud(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop); }
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  if(left)basket.x-=7; if(right)basket.x+=7; basket.x=Math.max(0,Math.min(W-basket.w,basket.x));
+  spawnT--; if(spawnT<=0){ spawnT=Math.max(22,55-score*0.3); const bad=Math.random()<0.22+Math.min(0.2,score*0.002); items.push({x:20+Math.random()*(W-40), y:-20, bad, emoji: bad?BAD[0]:GOOD[0|Math.random()*GOOD.length], vy:speed+Math.random()*2}); }
+  speed=2.4+score*0.015;
+  items.forEach(it=>it.y+=it.vy);
+  for(const it of items){ if(it.dead)continue;
+    if(it.y>basket.y-8 && it.y<basket.y+20 && it.x>basket.x-10 && it.x<basket.x+basket.w+10){ it.dead=true; if(it.bad){ lives--; sfx('lose'); if(lives<=0){updateHud();return gameOver();} } else { score+= it.emoji==='⭐'?5:1; sfx('pop'); } updateHud(); }
+    else if(it.y>H+20){ it.dead=true; if(!it.bad){ /* missed good: no penalty */ } }
+  }
+  items=items.filter(it=>!it.dead);
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.font='28px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  items.forEach(it=>ctx.fillText(it.emoji,it.x,it.y));
+  // basket
+  ctx.fillStyle='#b0783a'; ctx.beginPath(); ctx.moveTo(basket.x,basket.y); ctx.lineTo(basket.x+basket.w,basket.y); ctx.lineTo(basket.x+basket.w-10,basket.y+22); ctx.lineTo(basket.x+10,basket.y+22); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#8a5a28'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(basket.x,basket.y); ctx.lineTo(basket.x+basket.w,basket.y); ctx.stroke();
+}
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('best').textContent=best; document.getElementById('lives').textContent=lives; }
+function gameOver(){ over=true; const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Score '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250); }
+function moveTo(cx){ const rect=cv.getBoundingClientRect(); basket.x=(cx-rect.left)*(W/rect.width)-basket.w/2; basket.x=Math.max(0,Math.min(W-basket.w,basket.x)); }
+cv.addEventListener('mousemove',e=>moveTo(e.clientX));
+cv.addEventListener('touchmove',e=>{e.preventDefault();moveTo(e.touches[0].clientX);},{passive:false});
+document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'||e.key==='a'){left=true;e.preventDefault();} if(e.key==='ArrowRight'||e.key==='d'){right=true;e.preventDefault();} });
+document.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft'||e.key==='a')left=false; if(e.key==='ArrowRight'||e.key==='d')right=false; });
+newGame();
+</script>
+</body>
+</html>

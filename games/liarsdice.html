@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Liar's Dice</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ld-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.ld-players{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;}
+.ld-p{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.ld-lbl{font-family:'Orbitron',monospace;font-size:13px;letter-spacing:2px;}
+.ld-dice{display:flex;gap:6px;min-height:46px;}
+.d{width:42px;height:42px;border-radius:9px;background:#f5f0e4;border:2px solid #333;position:relative;}
+.d.hidden{background:repeating-linear-gradient(45deg,#3a2a5a,#3a2a5a 6px,#2a1e44 6px,#2a1e44 12px);}
+.pip{position:absolute;width:8px;height:8px;border-radius:50%;background:#111;}
+.ld-bid{font-family:'Orbitron',monospace;font-size:17px;min-height:26px;letter-spacing:1px;text-align:center;}
+.ld-bid b{color:#f0c040}
+.ld-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;color:var(--dim);text-align:center;}
+.ld-ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;}
+.ld-ctrl select{font-family:'Orbitron',monospace;font-size:14px;padding:8px;border-radius:8px;background:var(--surface);color:var(--fg);border:2px solid var(--border);}
+.ld-b{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:11px 22px;border-radius:10px;border:3px solid var(--accent);background:var(--surface);color:var(--accent);cursor:pointer;}
+.ld-b.liar{border-color:#e05050;color:#e05050}
+.ld-b:disabled{opacity:.4;cursor:default}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">🎲 LIAR'S DICE</span>
+  <div class="h-btns"><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="ld-wrap">
+  <div class="ld-players">
+    <div class="ld-p"><div class="ld-lbl" style="color:#f0c040">YOU (<span id="yc">5</span>)</div><div class="ld-dice" id="yd"></div></div>
+    <div class="ld-p"><div class="ld-lbl" style="color:#5090e0">AI (<span id="ac">5</span>)</div><div class="ld-dice" id="ad"></div></div>
+  </div>
+  <div class="ld-bid" id="bid">No bid yet</div>
+  <div class="ld-msg" id="msg">Make a bid or call the AI a liar.</div>
+  <div class="ld-ctrl">
+    <span style="font-family:Orbitron,monospace;font-size:13px">BID</span>
+    <select id="qty"></select><span style="font-family:Orbitron,monospace">×</span><select id="face"></select>
+    <button class="ld-b" id="bidBtn" onclick="makeBid()">BID</button>
+    <button class="ld-b liar" id="liarBtn" onclick="callLiar()">LIAR!</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='liarsdice';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const PIPS={1:[[1,1]],2:[[0,0],[2,2]],3:[[0,0],[1,1],[2,2]],4:[[0,0],[0,2],[2,0],[2,2]],5:[[0,0],[0,2],[1,1],[2,0],[2,2]],6:[[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]};
+let you=[], ai=[], bid=null, turn='you', over=false, reveal=false;
+function roll(n){ const a=[]; for(let i=0;i<n;i++)a.push(1+(0|Math.random()*6)); return a; }
+function newGame(){ you=roll(5); ai=roll(5); bid=null; turn='you'; over=false; reveal=false; document.getElementById('win-overlay').classList.remove('show'); setMsg('Make a bid or call the AI a liar.'); document.getElementById('bid').textContent='No bid yet'; fillSelects(); render(); setButtons(); }
+function total(){ return you.length+ai.length; }
+function count(face){ return [...you,...ai].filter(d=>d===face||d===1).length; } // 1s wild
+function fillSelects(){ const q=document.getElementById('qty'), f=document.getElementById('face'); q.innerHTML=''; f.innerHTML='';
+  for(let i=1;i<=total();i++){ const o=document.createElement('option'); o.value=i; o.textContent=i; q.appendChild(o); }
+  for(let i=2;i<=6;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i; f.appendChild(o); }
+  // default to a legal minimum bid
+  const min=minBid(); q.value=min.qty; f.value=min.face;
+}
+function minBid(){ if(!bid)return {qty:1,face:2}; if(bid.face<6)return {qty:bid.qty,face:bid.face+1}; return {qty:bid.qty+1,face:2}; }
+function bidValue(b){ return b.qty*10+b.face; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function setButtons(){ const my=turn==='you'&&!over; document.getElementById('bidBtn').disabled=!my; document.getElementById('liarBtn').disabled=!my||!bid; document.getElementById('qty').disabled=!my; document.getElementById('face').disabled=!my; }
+function makeBid(){ if(turn!=='you'||over)return; const q=+document.getElementById('qty').value, f=+document.getElementById('face').value; const nb={qty:q,face:f};
+  if(bid && bidValue(nb)<=bidValue(bid)){ setMsg('Your bid must raise the quantity or the face.'); sfx('error'); return; }
+  bid=nb; sfx('place'); showBid('You'); turn='ai'; setButtons(); setTimeout(aiTurn,900); }
+function showBid(who){ document.getElementById('bid').innerHTML=who+' bid: <b>'+bid.qty+' × '+bid.face+'s</b>'; }
+function aiTurn(){ if(over)return; const actual=count(bid.face); const need=bid.qty; const avg=total()/6*2; // expected incl wild roughly
+  // probability-ish: if bid already exceeds what's plausible, call liar
+  const expected= (you.length+ai.length)* (1/6 + 1/6); // face + wild ones ~ 1/3 each die
+  const doubtful = bid.qty > expected + 1.2 + Math.random();
+  if(doubtful && bid.qty> Math.ceil(expected)){ return aiCallLiar(); }
+  // else raise
+  let nb=minBid();
+  // AI tends to bid a face it holds a lot of
+  const counts={}; for(let f=2;f<=6;f++)counts[f]=ai.filter(d=>d===f||d===1).length;
+  let bestFace=2,bc=-1; for(let f=2;f<=6;f++)if(counts[f]>bc){bc=counts[f];bestFace=f;}
+  if(bidValue({qty:bid.qty,face:bestFace})>bidValue(bid)){ nb={qty:bid.qty,face:bestFace}; }
+  if(bidValue(nb)<=bidValue(bid)) nb=minBid();
+  if(nb.qty>total()){ return aiCallLiar(); }
+  bid=nb; sfx('select'); showBid('AI'); setMsg('AI bids '+bid.qty+' × '+bid.face+'s. Your move.'); turn='you'; fillSelects(); setButtons();
+}
+function aiCallLiar(){ reveal=true; render(); const actual=count(bid.face); const ok=actual>=bid.qty; sfx(ok?'win':'lose');
+  // AI called YOUR bid a lie. If bid holds (ok), caller(AI) loses a die; else bidder(you) loses.
+  setMsg('AI calls LIAR! There were '+actual+' '+bid.face+'s (incl. wild 1s).');
+  setTimeout(()=>{ if(ok){ loseDie('ai','Bid was good — AI loses a die.'); } else { loseDie('you','Bid was a lie — you lose a die.'); } }, 1200); }
+function callLiar(){ if(turn!=='you'||over||!bid)return; reveal=true; render(); const actual=count(bid.face); const ok=actual>=bid.qty; sfx(ok?'lose':'win');
+  setMsg('You call LIAR! There were '+actual+' '+bid.face+'s (incl. wild 1s).');
+  setTimeout(()=>{ if(ok){ loseDie('you','Bid held up — you lose a die.'); } else { loseDie('ai','Caught the bluff — AI loses a die!'); } }, 1200); }
+function loseDie(who,m){ if(who==='you')you.pop(); else ai.pop(); setMsg(m);
+  document.getElementById('yc').textContent=you.length; document.getElementById('ac').textContent=ai.length;
+  if(you.length===0)return finish(false); if(ai.length===0)return finish(true);
+  // new round
+  you=roll(you.length); ai=roll(ai.length); bid=null; reveal=false; turn=who; // loser starts
+  document.getElementById('bid').textContent='New round — no bid yet'; fillSelects(); render(); setButtons();
+  if(turn==='ai') setTimeout(()=>{ bid={qty:1,face:2}; showBid('AI'); setMsg('AI opens 1 × 2s. Your move.'); turn='you'; fillSelects(); setButtons(); },800);
+}
+function render(){ drawDice('yd',you,false); drawDice('ad',ai,!reveal); }
+function drawDice(id,arr,hide){ const el=document.getElementById(id); el.innerHTML=''; arr.forEach(v=>{ const d=document.createElement('div'); d.className='d'+(hide?' hidden':''); if(!hide)PIPS[v].forEach(([r,c])=>{const p=document.createElement('div');p.className='pip';p.style.left=(6+c*13)+'px';p.style.top=(6+r*13)+'px';d.appendChild(p);}); el.appendChild(d); }); }
+function finish(youWin){ over=true; setButtons(); if(youWin&&window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 AI WINS!'; document.getElementById('win-sub').textContent=youWin?'The AI lost all its dice!':'You lost all your dice.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

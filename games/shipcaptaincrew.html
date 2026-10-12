@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ship Captain Crew</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.sc-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 12px;}
+.sc-scores{display:flex;gap:36px;}
+.sc-s{font-family:'Orbitron',monospace;text-align:center;} .sc-s .v{font-size:30px;font-weight:900;} .sc-s .l{font-size:11px;color:var(--dim);letter-spacing:2px;}
+.sc-need{font-family:'Orbitron',monospace;font-size:13px;display:flex;gap:10px;}
+.sc-need span.got{color:var(--green);} .sc-need span{color:var(--dim);}
+.sc-dice{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;min-height:62px;}
+.die{width:56px;height:56px;border-radius:12px;background:#f5f0e4;border:2px solid #333;position:relative;box-shadow:1px 2px 5px rgba(0,0,0,.4);}
+.die.set{outline:3px solid var(--green);} .die.cargo{outline:3px solid var(--accent);}
+.pip{position:absolute;width:11px;height:11px;border-radius:50%;background:#111;}
+.sc-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;letter-spacing:1px;text-align:center;}
+.sc-btn{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:12px 24px;border-radius:10px;border:3px solid var(--accent);color:var(--accent);background:var(--surface);cursor:pointer;letter-spacing:1px;}
+.sc-btn:disabled{opacity:.4;cursor:default;}
+.sc-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:440px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">⚓ SHIP CAPTAIN CREW</span>
+  <div class="h-btns"><div class="info-pill">ROUND: <span id="round">1</span>/5</div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="sc-wrap">
+  <div class="sc-scores"><div class="sc-s" style="color:#f0c040"><div class="v" id="s0">0</div><div class="l">YOU</div></div><div class="sc-s" style="color:#5090e0"><div class="v" id="s1">0</div><div class="l">AI</div></div></div>
+  <div class="sc-need" id="need"><span id="n6">🚢 SHIP (6)</span><span id="n5">👑 CAPTAIN (5)</span><span id="n4">⚓ CREW (4)</span></div>
+  <div class="sc-dice" id="dice"></div>
+  <div class="sc-msg" id="msg">Roll to get a 6, then 5, then 4 — the other two are your cargo!</div>
+  <button class="sc-btn" id="rollBtn" onclick="roll()">🎲 ROLL (<span id="rolls">3</span>)</button>
+  <div class="sc-hint">You get 3 rolls. A 6 (ship), 5 (captain) and 4 (crew) must come in order. The remaining two dice are your cargo score. Highest total over 5 rounds wins.</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='shipcaptaincrew';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const PIPS={1:[[1,1]],2:[[0,0],[2,2]],3:[[0,0],[1,1],[2,2]],4:[[0,0],[0,2],[2,0],[2,2]],5:[[0,0],[0,2],[1,1],[2,0],[2,2]],6:[[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]};
+let scores=[0,0], round=1, dice=[], set={6:false,5:false,4:false}, rolls=3, turn=0, over=false, busy=false;
+function newGame(){ scores=[0,0]; round=1; over=false; busy=false; startTurn(0); update(); document.getElementById('win-overlay').classList.remove('show'); }
+function startTurn(t){ turn=t; dice=[1,1,1,1,1]; set={6:false,5:false,4:false}; rolls=3; renderDice(); updateNeed(); setMsg(t===0?'Your turn — roll!':'🤖 AI rolling…');
+  document.getElementById('rollBtn').disabled=t!==0||over; document.getElementById('rolls').textContent=rolls;
+  if(t===1&&!over){ busy=true; setTimeout(aiRoll,700); } }
+function roll(){ if(over||busy||turn!==0||rolls<=0)return; doRoll(); if(rolls<=0||(set[6]&&set[5]&&set[4]))setTimeout(endPlayerTurn,700); }
+function doRoll(){ for(let i=0;i<5;i++){ if(!isSet(i)) dice[i]=1+(0|Math.random()*6); } rolls--; sfx('select'); applySets(); renderDice(); updateNeed(); document.getElementById('rolls').textContent=rolls;
+  if(set[6]&&set[5]&&set[4]){ setMsg('Cargo: '+cargo()+'! '+(turn===0?'Banking…':'')); } }
+function isSet(i){ // a die is "set" if it's holding a needed value in order
+  return setIdx.includes(i);
+}
+let setIdx=[];
+function applySets(){ setIdx=[]; let need=[6,5,4]; set={6:false,5:false,4:false};
+  // greedily assign in order 6 then 5 then 4
+  const used=Array(5).fill(false);
+  for(const v of need){ for(let i=0;i<5;i++){ if(!used[i]&&dice[i]===v && (v===6 || (v===5&&set[6]) || (v===4&&set[6]&&set[5]))){ used[i]=true; setIdx.push(i); set[v]=true; break; } } }
+}
+function cargo(){ if(!(set[6]&&set[5]&&set[4]))return 0; let c=[]; for(let i=0;i<5;i++)if(!setIdx.includes(i))c.push(dice[i]); return c.reduce((a,b)=>a+b,0); }
+function endPlayerTurn(){ const c=cargo(); scores[0]+=c; update(); setMsg('You scored '+c+' cargo.'); sfx(c>0?'win':'lose'); document.getElementById('rollBtn').disabled=true; setTimeout(()=>startTurn(1),900); }
+function aiRoll(){ if(over)return; doRoll();
+  if(rolls>0 && !(set[6]&&set[5]&&set[4])){ setTimeout(aiRoll,650); return; }
+  const c=cargo(); scores[1]+=c; update(); setMsg('AI scored '+c+' cargo.'); busy=false;
+  setTimeout(()=>{ if(round>=5){ return finish(); } round++; startTurn(0); update(); },1000); }
+function renderDice(){ const d=document.getElementById('dice'); d.innerHTML=''; dice.forEach((v,i)=>{ const die=document.createElement('div'); die.className='die'+(setIdx.includes(i)?' set':((set[6]&&set[5]&&set[4])?' cargo':'')); PIPS[v].forEach(([r,c])=>{const p=document.createElement('div');p.className='pip';p.style.left=(8+c*18)+'px';p.style.top=(8+r*18)+'px';die.appendChild(p);}); d.appendChild(die); }); }
+function updateNeed(){ document.getElementById('n6').className=set[6]?'got':''; document.getElementById('n5').className=set[5]?'got':''; document.getElementById('n4').className=set[4]?'got':''; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function update(){ document.getElementById('s0').textContent=scores[0]; document.getElementById('s1').textContent=scores[1]; document.getElementById('round').textContent=round; }
+function finish(){ over=true; const youWin=scores[0]>scores[1], tie=scores[0]===scores[1]; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=tie?'🤝 TIE!':(youWin?'🏆 YOU WIN!':'🤖 AI WINS!'); document.getElementById('win-sub').textContent='Final: You '+scores[0]+' · AI '+scores[1]; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500); }
+newGame();
+</script>
+</body>
+</html>

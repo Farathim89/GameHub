@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flood It</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.fi-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 12px;}
+.fi-grid{display:grid;gap:0;border:3px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.fi-cell{width:100%;height:100%;}
+.fi-pal{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.fi-swatch{width:50px;height:50px;border-radius:10px;border:3px solid rgba(255,255,255,.25);cursor:pointer;transition:transform .12s;}
+.fi-swatch:hover{transform:scale(1.12);}
+.fi-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">🎨 FLOOD IT</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()">
+      <option value="12">12×12</option>
+      <option value="14" selected>14×14</option>
+      <option value="18">18×18</option>
+    </select>
+    <div class="info-pill">MOVES: <span id="moves">0</span>/<span id="max">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="fi-wrap">
+  <div class="fi-hint">Flood the board from the top-left corner. Make it <b>all one colour</b> before you run out of moves.</div>
+  <div id="grid" class="fi-grid"></div>
+  <div id="pal" class="fi-pal"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 FLOODED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='floodit';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const COLORS=['#e05050','#f0a040','#f0c040','#40c0a0','#5090e0','#c080e0'];
+let N=14, grid=[], moves=0, maxMoves=0, over=false;
+
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  over=false; moves=0;
+  maxMoves=Math.round(N*0.9+ (N/14)*6); // generous-ish allowance
+  document.getElementById('win-overlay').classList.remove('show');
+  grid=Array.from({length:N},()=>Array.from({length:N},()=>0|Math.random()*COLORS.length));
+  buildPal(); render();
+  document.getElementById('max').textContent=maxMoves;
+}
+function buildPal(){
+  const p=document.getElementById('pal'); p.innerHTML='';
+  COLORS.forEach((c,i)=>{ const s=document.createElement('div'); s.className='fi-swatch'; s.style.background=c; s.onclick=()=>pick(i); p.appendChild(s); });
+}
+function render(){
+  const g=document.getElementById('grid'); if(!g)return;
+  const cell=Math.floor(Math.min(window.innerWidth-40,460)/N);
+  g.style.gridTemplateColumns=`repeat(${N},${cell}px)`;
+  g.style.gridTemplateRows=`repeat(${N},${cell}px)`;
+  g.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div'); d.className='fi-cell'; d.style.background=COLORS[grid[r][c]]; g.appendChild(d);
+  }
+  document.getElementById('moves').textContent=moves;
+}
+function pick(color){
+  if(over) return;
+  const start=grid[0][0];
+  if(color===start){ sfx('error'); return; }
+  moves++;
+  flood(start,color);
+  sfx('place'); render();
+  if(won()){ win(); }
+  else if(moves>=maxMoves){ lose(); }
+}
+function flood(from,to){
+  const st=[[0,0]]; const seen=Array.from({length:N},()=>Array(N).fill(false));
+  while(st.length){
+    const [r,c]=st.pop();
+    if(r<0||r>=N||c<0||c>=N||seen[r][c]||grid[r][c]!==from) continue;
+    seen[r][c]=true; grid[r][c]=to;
+    st.push([r+1,c],[r-1,c],[r,c+1],[r,c-1]);
+  }
+}
+function won(){ const f=grid[0][0]; return grid.every(row=>row.every(v=>v===f)); }
+function win(){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best_'+N,moves,'low'):{value:moves,isBest:false};
+  document.getElementById('win-msg').textContent='🏆 FLOODED!';
+  document.getElementById('win-sub').textContent='Solved in '+moves+' moves'+(r.isBest?' — NEW BEST! 🎉':' · Best '+r.value);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function lose(){
+  over=true;
+  document.getElementById('win-msg').textContent='💥 OUT OF MOVES';
+  document.getElementById('win-sub').textContent='Not quite — try again!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+window.addEventListener('resize',()=>{ if(grid.length) render(); });
+newGame();
+</script>
+</body>
+</html>

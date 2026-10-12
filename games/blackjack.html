@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Blackjack</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.bj-wrap{display:flex;flex-direction:column;align-items:center;padding:16px;gap:14px;max-width:760px;margin:0 auto;}
+.bj-table{width:100%;background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px;}
+.bj-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-height:96px;}
+.bj-lbl{font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);letter-spacing:2px;display:flex;gap:10px;align-items:center;}
+.bj-lbl .val{color:var(--accent);font-size:14px;}
+.card{width:64px;height:92px;font-size:20px;}
+.bj-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.bj-btn{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:12px 24px;border-radius:9px;border:2px solid;cursor:pointer;letter-spacing:1px;background:var(--surface2);transition:all .15s;}
+.bj-btn:hover:not(:disabled){transform:translateY(-2px);}
+.bj-btn:disabled{opacity:.3;cursor:not-allowed;}
+.bj-btn.hit{color:var(--green);border-color:var(--green);}
+.bj-btn.stand{color:var(--red);border-color:var(--red);}
+.bj-btn.dbl{color:var(--blue);border-color:var(--blue);}
+.bj-btn.deal{color:var(--accent);border-color:var(--accent);}
+.chip-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;}
+.chip{width:52px;height:52px;border-radius:50%;border:4px dashed rgba(255,255,255,.5);cursor:pointer;font-family:'Orbitron',monospace;font-weight:900;font-size:12px;color:#fff;transition:transform .15s;box-shadow:0 3px 8px rgba(0,0,0,.5);}
+.chip:hover{transform:scale(1.12);}
+.chip.c10{background:#2a70c0;}.chip.c25{background:#1a9a50;}.chip.c50{background:#c04020;}.chip.c100{background:#222;border-color:#f0c040;color:#f0c040;}
+.bj-msg{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;letter-spacing:1px;text-align:center;min-height:24px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🂡 BLACKJACK</span>
+  <div class="h-btns">
+    <div class="info-pill">💰 <span id="bank">500</span></div>
+    <div class="info-pill">BET: <span id="bet">0</span></div>
+    <button class="hbtn" onclick="resetBank()">RESET BANK</button>
+  </div>
+</div>
+
+<div class="bj-wrap">
+  <div class="bj-table">
+    <div>
+      <div class="bj-lbl">DEALER <span class="val" id="d-val"></span></div>
+      <div class="bj-row" id="d-cards"></div>
+    </div>
+    <div>
+      <div class="bj-lbl">YOU <span class="val" id="p-val"></span></div>
+      <div class="bj-row" id="p-cards"></div>
+    </div>
+  </div>
+
+  <div class="bj-msg" id="msg">PLACE YOUR BET</div>
+
+  <div class="chip-row" id="chips">
+    <button class="chip c10" onclick="addBet(10)">10</button>
+    <button class="chip c25" onclick="addBet(25)">25</button>
+    <button class="chip c50" onclick="addBet(50)">50</button>
+    <button class="chip c100" onclick="addBet(100)">100</button>
+    <button class="hbtn" onclick="clearBet()">CLEAR</button>
+  </div>
+
+  <div class="bj-btns">
+    <button class="bj-btn deal" id="deal-btn" onclick="deal()" disabled>▶ DEAL</button>
+    <button class="bj-btn hit" id="hit-btn" onclick="hit()" disabled>HIT</button>
+    <button class="bj-btn stand" id="stand-btn" onclick="stand()" disabled>STAND</button>
+    <button class="bj-btn dbl" id="dbl-btn" onclick="doubleDown()" disabled>DOUBLE</button>
+  </div>
+</div>
+
+<script>
+const SUITS=['♠','♥','♦','♣'],RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let deck=[],pHand=[],dHand=[],bank=500,bet=0,inRound=false,holeHidden=true;
+let prevP=0,prevD=0,prevHole=true;
+
+try{bank=parseInt(localStorage.getItem('gamehub.bj.bank'))||500;}catch(e){}
+if(bank<10)bank=500;
+
+function saveBank(){try{localStorage.setItem('gamehub.bj.bank',bank);}catch(e){}}
+function resetBank(){bank=500;bet=0;inRound=false;saveBank();ui();renderAll();setMsg('BANK RESET — PLACE YOUR BET');}
+
+function mkDeck(){
+  const d=[];
+  for(let n=0;n<4;n++)for(const s of SUITS)for(const r of RANKS)d.push({s,r}); // 4-deck shoe
+  for(let i=d.length-1;i>0;i--){const j=0|Math.random()*(i+1);[d[i],d[j]]=[d[j],d[i]];}
+  return d;
+}
+function handVal(hand){
+  let v=0,aces=0;
+  for(const c of hand){
+    if(c.r==='A'){v+=11;aces++;}
+    else if(['J','Q','K'].includes(c.r))v+=10;
+    else v+=parseInt(c.r);
+  }
+  while(v>21&&aces>0){v-=10;aces--;}
+  return v;
+}
+const isBJ=h=>h.length===2&&handVal(h)===21;
+
+function addBet(n){
+  if(inRound)return;
+  if(bet+n>bank){setMsg('❌ NOT ENOUGH CHIPS');return;}
+  bet+=n;ui();setMsg('BET: '+bet+' — PRESS DEAL');
+}
+function clearBet(){if(inRound)return;bet=0;ui();setMsg('PLACE YOUR BET');}
+
+function deal(){
+  if(inRound||bet<=0)return;
+  if(deck.length<52)deck=mkDeck();
+  prevP=0;prevD=0;prevHole=true;
+  if(window.GH)GH.chip('#p-cards',{count:Math.min(6,1+Math.floor(bet/10))});
+  pHand=[deck.pop(),deck.pop()];
+  dHand=[deck.pop(),deck.pop()];
+  inRound=true;holeHidden=true;
+  renderAll();ui();
+
+  if(isBJ(pHand)&&isBJ(dHand)){finish('push');return;}
+  if(isBJ(pHand)){finish('bj');return;}
+  if(isBJ(dHand)){holeHidden=false;renderAll();finish('lose');return;}
+  setMsg('HIT, STAND OR DOUBLE?');
+}
+
+function hit(){
+  if(!inRound)return;
+  pHand.push(deck.pop());
+  renderAll();ui();
+  const v=handVal(pHand);
+  if(v>21)finish('bust');
+  else if(v===21)stand();
+}
+
+function stand(){
+  if(!inRound)return;
+  holeHidden=false;renderAll();
+  const dealerPlay=()=>{
+    if(handVal(dHand)<17){
+      dHand.push(deck.pop());renderAll();
+      setTimeout(dealerPlay,550);
+    } else {
+      const pv=handVal(pHand),dv=handVal(dHand);
+      if(dv>21)finish('dealer-bust');
+      else if(pv>dv)finish('win');
+      else if(pv<dv)finish('lose');
+      else finish('push');
+    }
+  };
+  setTimeout(dealerPlay,500);
+  ui(true);
+}
+
+function doubleDown(){
+  if(!inRound||pHand.length!==2||bet*2>bank)return;
+  bet*=2;ui();
+  pHand.push(deck.pop());
+  renderAll();
+  if(handVal(pHand)>21)finish('bust');
+  else stand();
+}
+
+function finish(result){
+  inRound=false;holeHidden=false;renderAll();
+  let delta=0,m='';
+  switch(result){
+    case 'bj':         delta=Math.floor(bet*1.5); m='🂡 BLACKJACK! +'+delta;break;
+    case 'win':        delta=bet;  m='🏆 YOU WIN! +'+bet;break;
+    case 'dealer-bust':delta=bet;  m='💥 DEALER BUSTS! +'+bet;break;
+    case 'lose':       delta=-bet; m='😞 DEALER WINS — '+bet;break;
+    case 'bust':       delta=-bet; m='💥 BUST! — '+bet;break;
+    case 'push':       delta=0;    m='🤝 PUSH — BET RETURNED';break;
+  }
+  bank+=delta;saveBank();
+  if(delta>0 && window.GH)GH.chip('#bank',{count:Math.min(8,2+Math.floor(delta/10)),color:'#40d070'});
+  bet=0;
+  ui();
+  setMsg(m+(bank<10?' · BANK EMPTY — PRESS RESET':''));
+}
+
+function setMsg(m){document.getElementById('msg').textContent=m;}
+
+function cardEl(c,hidden){
+  if(hidden)return '<div class="card back" style="width:64px;height:92px;"></div>';
+  const red=c.s==='♥'||c.s==='♦';
+  return `<div class="card ${red?'red':'black'}" style="width:64px;height:92px;">
+    <div class="ctop"><span class="crank">${c.r}</span><span class="csuit">${c.s}</span></div>
+    <div class="cmid">${c.s}</div>
+    <div class="cbott"><span class="crank">${c.r}</span><span class="csuit">${c.s}</span></div>
+  </div>`;
+}
+
+function renderAll(){
+  const pEl=document.getElementById('p-cards'), dEl=document.getElementById('d-cards');
+  pEl.innerHTML=pHand.map(c=>cardEl(c,false)).join('');
+  dEl.innerHTML=dHand.map((c,i)=>cardEl(c,holeHidden&&i===1)).join('');
+  document.getElementById('p-val').textContent=pHand.length?handVal(pHand):'';
+  document.getElementById('d-val').textContent=dHand.length?(holeHidden?handVal([dHand[0]])+' + ?':handVal(dHand)):'';
+  // animate newly dealt cards + flip the dealer hole card on reveal
+  for(let i=prevP;i<pEl.children.length;i++){ pEl.children[i].classList.add('gh-deal'); pEl.children[i].style.animationDelay=((i-prevP)*90)+'ms'; }
+  for(let i=prevD;i<dEl.children.length;i++){ dEl.children[i].classList.add('gh-deal'); dEl.children[i].style.animationDelay=((i-prevD)*90)+'ms'; }
+  if(prevHole && !holeHidden && dEl.children[1]) dEl.children[1].classList.add('gh-flip');
+  prevP=pHand.length; prevD=dHand.length; prevHole=holeHidden;
+}
+
+function ui(dealerTurn=false){
+  document.getElementById('bank').textContent=bank;
+  document.getElementById('bet').textContent=bet;
+  document.getElementById('deal-btn').disabled=inRound||bet<=0;
+  document.getElementById('hit-btn').disabled=!inRound||dealerTurn;
+  document.getElementById('stand-btn').disabled=!inRound||dealerTurn;
+  document.getElementById('dbl-btn').disabled=!inRound||dealerTurn||pHand.length!==2||bet*2>bank;
+  document.getElementById('chips').style.opacity=inRound?0.35:1;
+  document.getElementById('chips').style.pointerEvents=inRound?'none':'auto';
+}
+
+ui();renderAll();
+</script>
+</body>
+</html>

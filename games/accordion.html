@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Accordion</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ac-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 10px;}
+.ac-piles{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;max-width:720px;}
+.card{width:52px;height:74px;font-size:17px;cursor:pointer;transition:transform .12s;position:relative;} .card .ctop{padding:3px 4px;}
+.card.move{box-shadow:0 0 0 2px var(--green);} .card.move:hover{transform:translateY(-6px);}
+.ac-badge{position:absolute;bottom:2px;right:3px;font-family:'Orbitron',monospace;font-size:9px;color:var(--dim);}
+.ac-msg{font-family:'Orbitron',monospace;font-size:13px;min-height:20px;letter-spacing:1px;text-align:center;}
+.ac-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">🪗 ACCORDION</span>
+  <div class="h-btns"><div class="info-pill">PILES: <span id="count">52</span></div><button class="hbtn" onclick="undo()">↩ UNDO</button><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="ac-wrap">
+  <div class="ac-hint">Move a card onto the pile <b>1 or 3 to its left</b> if they match <b>suit or rank</b>. Squeeze all 52 cards into <b>one pile</b> to win!</div>
+  <div class="ac-msg" id="msg"></div>
+  <div class="ac-piles" id="piles"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='accordion';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let piles=[], history=[], over=false;
+function newGame(){ let deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck); piles=deck.map(c=>[c]); history=[]; over=false;
+  document.getElementById('win-overlay').classList.remove('show'); setMsg('Click a glowing card to squeeze it left.'); render(); document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(Math.min(i,40)*18)+'ms';}); }
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function topc(i){ return piles[i][piles[i].length-1]; }
+function match(a,b){ return a.s===b.s||a.r===b.r; }
+function canMove(i){ if(i>=1&&match(topc(i),topc(i-1)))return i-1; if(i>=3&&match(topc(i),topc(i-3)))return i-3; return -1; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function clickPile(i){ if(over)return; const dest=canMove(i); if(dest<0){ sfx('error'); return; }
+  history.push(piles.map(p=>p.slice())); // move whole pile i onto dest (accordion moves the top pile's top card; classic moves the pile)
+  piles[dest]=piles[dest].concat(piles[i]); piles.splice(i,1); sfx('place'); render();
+  if(piles.length===1) return win();
+  if(!anyMove()){ setMsg('No moves left — '+piles.length+' piles remain.'); } }
+function anyMove(){ for(let i=0;i<piles.length;i++)if(canMove(i)>=0)return true; return false; }
+function undo(){ if(over||!history.length)return; piles=history.pop(); render(); }
+function cardHTML(card,move){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'} ${move?'move':''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function render(){ const p=document.getElementById('piles'); p.innerHTML='';
+  piles.forEach((pile,i)=>{ const canM=canMove(i)>=0; const div=document.createElement('div'); div.innerHTML=cardHTML(topc(i),canM); const el=div.firstChild; if(pile.length>1){ const b=document.createElement('div'); b.className='ac-badge'; b.textContent='×'+pile.length; el.appendChild(b); } el.onclick=()=>clickPile(i); p.appendChild(el); });
+  document.getElementById('count').textContent=piles.length;
+}
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='All 52 cards in one pile — a rare feat! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+newGame();
+</script>
+</body>
+</html>

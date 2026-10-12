@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flow</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.fw-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.fw-grid{display:grid;gap:3px;background:var(--surface);padding:6px;border-radius:12px;border:2px solid var(--border);touch-action:none;}
+.fw-cell{position:relative;background:#141420;border-radius:5px;}
+.fw-dot{position:absolute;border-radius:50%;}
+.fw-pipe{position:absolute;}
+.fw-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:440px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">🌈 FLOW</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()">
+      <option value="5" selected>5×5</option>
+      <option value="6">6×6</option>
+      <option value="7">7×7</option>
+      <option value="8">8×8</option>
+    </select>
+    <div class="info-pill">PIPES: <span id="done">0</span>/<span id="total">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="fw-wrap">
+  <div class="fw-hint">Drag from a coloured dot to its twin. Fill <b>every</b> square and connect all pairs to win.</div>
+  <div id="grid" class="fw-grid"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='flow';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const COLORS=['#e05050','#f0c040','#40c0a0','#5090e0','#c080e0','#f090c0','#50d0d0','#a0e050','#f0a040','#8090f0'];
+let N=5, owner=[], endpoints=[], cell=0, over=false;
+let flows=[]; // flows[color] = [[r,c],...]
+let drawing=null;
+
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  generate();
+  render();
+}
+function key(r,c){return r+','+c;}
+function generate(){
+  // 1. random Hamiltonian path covering all cells (backtracking)
+  let path=null;
+  for(let attempt=0;attempt<40 && !path;attempt++) path=hamilton();
+  if(!path){ path=snakePath(); }
+  // 2. cut into K segments (K colors), each length>=2
+  const K=Math.min(COLORS.length, Math.max(3, Math.round(N*0.9)));
+  const cuts=[0];
+  const minSeg=2;
+  let remaining=path.length;
+  // choose K-1 cut points producing segments >=2
+  let segs=[];
+  let idx=0;
+  const target=Math.floor(path.length/K);
+  for(let k=0;k<K-1;k++){ let len=Math.max(minSeg, target + (0|(Math.random()*3))-1); if(path.length-(idx+len) < (K-1-k)*minSeg) len=minSeg; segs.push(path.slice(idx,idx+len)); idx+=len; }
+  segs.push(path.slice(idx));
+  if(segs[segs.length-1].length<minSeg){ // merge tail
+    const t=segs.pop(); segs[segs.length-1]=segs[segs.length-1].concat(t);
+  }
+  // endpoints = first & last of each segment
+  endpoints=segs.map(s=>[s[0], s[s.length-1]]);
+  owner=Array.from({length:N},()=>Array(N).fill(-1));
+  endpoints.forEach(([a,b],color)=>{ owner[a[0]][a[1]]=color; owner[b[0]][b[1]]=color; });
+  flows=endpoints.map(()=>[]);
+  document.getElementById('total').textContent=endpoints.length;
+}
+function hamilton(){
+  const start=[0|Math.random()*N,0|Math.random()*N];
+  const vis=Array.from({length:N},()=>Array(N).fill(false));
+  const path=[]; let steps=0, cap=20000;
+  function dfs(r,c){
+    if(steps++>cap) return false;
+    vis[r][c]=true; path.push([r,c]);
+    if(path.length===N*N) return true;
+    const dirs=[[0,1],[1,0],[0,-1],[-1,0]].sort(()=>Math.random()-0.5);
+    for(const [dr,dc] of dirs){ const nr=r+dr,nc=c+dc; if(nr>=0&&nr<N&&nc>=0&&nc<N&&!vis[nr][nc]){ if(dfs(nr,nc))return true; } }
+    vis[r][c]=false; path.pop(); return false;
+  }
+  return dfs(start[0],start[1])? path : null;
+}
+function snakePath(){ const p=[]; for(let r=0;r<N;r++){ if(r%2===0)for(let c=0;c<N;c++)p.push([r,c]); else for(let c=N-1;c>=0;c--)p.push([r,c]); } return p; }
+
+function isEndpoint(r,c){ const o=owner[r][c]; if(o<0)return false; return endpoints[o].some(([er,ec])=>er===r&&ec===c); }
+function endpointColor(r,c){ for(let col=0;col<endpoints.length;col++) if(endpoints[col].some(([er,ec])=>er===r&&ec===c)) return col; return -1; }
+
+function startDraw(r,c){
+  if(over) return;
+  const col=owner[r][c];
+  if(col<0) return;
+  // start from an endpoint, or continue from a path cell
+  if(isEndpoint(r,c)){
+    clearFlow(col);
+    owner[r][c]=col; flows[col]=[[r,c]];
+    drawing={color:col};
+  } else {
+    // truncate flow at this cell
+    const f=flows[col]; const i=f.findIndex(p=>p[0]===r&&p[1]===c);
+    if(i>=0){ for(let k=i+1;k<f.length;k++){ const [pr,pc]=f[k]; if(!isEndpoint(pr,pc)) owner[pr][pc]=-1; } f.length=i+1; drawing={color:col}; }
+  }
+  render();
+}
+function extendTo(r,c){
+  if(!drawing||over) return;
+  const col=drawing.color; const f=flows[col];
+  if(!f.length) return;
+  const [hr,hc]=f[f.length-1];
+  if(r===hr&&c===hc) return;
+  // backtrack
+  if(f.length>=2 && f[f.length-2][0]===r && f[f.length-2][1]===c){ const [pr,pc]=f.pop(); if(!isEndpoint(pr,pc))owner[pr][pc]=-1; render(); return; }
+  if(Math.abs(r-hr)+Math.abs(c-hc)!==1) return; // must be adjacent
+  const occ=owner[r][c];
+  // can't go onto another color's endpoint, or this color's own start endpoint
+  if(isEndpoint(r,c)){ const ec=endpointColor(r,c); if(ec!==col) return; // reaching own other endpoint = finish
+  }
+  else if(occ>=0 && occ!==col){ // overwrite another color's path: cut it here
+    cutAt(occ,r,c);
+  } else if(occ===col){ // stepping onto own path (loop) -> ignore unless it's just next
+    return;
+  }
+  owner[r][c]=col; f.push([r,c]); sfx('move');
+  render();
+  if(isSolved()) win();
+}
+function cutAt(color,r,c){ const f=flows[color]; const i=f.findIndex(p=>p[0]===r&&p[1]===c); if(i>=0){ for(let k=i;k<f.length;k++){ const [pr,pc]=f[k]; if(!isEndpoint(pr,pc))owner[pr][pc]=-1; } f.length=i; } }
+function clearFlow(col){ const f=flows[col]; for(const [r,c] of f){ if(!isEndpoint(r,c)) owner[r][c]=-1; } flows[col]=[]; }
+function endDraw(){ drawing=null; render(); }
+
+function colorConnected(col){
+  const f=flows[col]; if(f.length<2)return false;
+  const [a,b]=endpoints[col];
+  const s=f[0], e=f[f.length-1];
+  const startsOk=(s[0]===a[0]&&s[1]===a[1])||(s[0]===b[0]&&s[1]===b[1]);
+  const endsOk=(e[0]===a[0]&&e[1]===a[1])||(e[0]===b[0]&&e[1]===b[1]);
+  return startsOk&&endsOk&&(s[0]!==e[0]||s[1]!==e[1]);
+}
+function solvedCount(){ let n=0; for(let col=0;col<endpoints.length;col++) if(colorConnected(col))n++; return n; }
+function isSolved(){
+  // all cells owned
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++) if(owner[r][c]<0) return false;
+  for(let col=0;col<endpoints.length;col++) if(!colorConnected(col)) return false;
+  return true;
+}
+function render(){
+  const g=document.getElementById('grid'); if(!g)return;
+  cell=Math.floor(Math.min(window.innerWidth-40,440)/N);
+  g.style.gridTemplateColumns=`repeat(${N},${cell}px)`;
+  g.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div'); d.className='fw-cell'; d.style.width=cell+'px'; d.style.height=cell+'px'; d.dataset.r=r; d.dataset.c=c;
+    const col=owner[r][c];
+    if(col>=0){
+      const color=COLORS[col];
+      if(isEndpoint(r,c)){ const dot=document.createElement('div'); dot.className='fw-dot'; const s=cell*0.6; dot.style.cssText=`width:${s}px;height:${s}px;left:${(cell-s)/2}px;top:${(cell-s)/2}px;background:${color};box-shadow:0 0 8px ${color}`; d.appendChild(dot); }
+      else { const pw=cell*0.5; const pipe=document.createElement('div'); pipe.style.cssText=`position:absolute;left:${(cell-pw)/2}px;top:${(cell-pw)/2}px;width:${pw}px;height:${pw}px;background:${color};border-radius:4px`; d.appendChild(pipe); }
+      // draw connectors to flow neighbours
+      drawConnectors(d,r,c,col);
+    }
+    g.appendChild(d);
+  }
+  document.getElementById('done').textContent=solvedCount();
+}
+function drawConnectors(d,r,c,col){
+  const f=flows[col]; if(!f.length)return;
+  const idx=f.findIndex(p=>p[0]===r&&p[1]===c); if(idx<0)return;
+  const nbrs=[]; if(idx>0)nbrs.push(f[idx-1]); if(idx<f.length-1)nbrs.push(f[idx+1]);
+  const color=COLORS[col], t=cell*0.5, half=cell/2;
+  nbrs.forEach(([nr,nc])=>{ const seg=document.createElement('div'); let st='position:absolute;background:'+color+';';
+    if(nr<r) st+=`left:${half-t/2}px;top:0;width:${t}px;height:${half}px;`;
+    else if(nr>r) st+=`left:${half-t/2}px;top:${half}px;width:${t}px;height:${half}px;`;
+    else if(nc<c) st+=`left:0;top:${half-t/2}px;width:${half}px;height:${t}px;`;
+    else st+=`left:${half}px;top:${half-t/2}px;width:${half}px;height:${t}px;`;
+    seg.style.cssText=st; d.appendChild(seg);
+  });
+}
+function win(){ over=true; drawing=null; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='Every pipe connected, grid full! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+
+function cellFromEvent(e){ const el=document.elementFromPoint(e.clientX,e.clientY); if(!el)return null; const cell=el.closest('.fw-cell'); if(!cell)return null; return [+cell.dataset.r,+cell.dataset.c]; }
+document.getElementById('grid').addEventListener('pointerdown',e=>{ e.preventDefault(); const p=cellFromEvent(e); if(p){ startDraw(p[0],p[1]); } });
+document.getElementById('grid').addEventListener('pointermove',e=>{ if(!drawing)return; const p=cellFromEvent(e); if(p) extendTo(p[0],p[1]); });
+document.addEventListener('pointerup',()=>{ if(drawing) endDraw(); });
+window.addEventListener('resize',()=>{ if(owner.length) render(); });
+newGame();
+</script>
+</body>
+</html>

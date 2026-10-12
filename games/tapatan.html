@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tapatan</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<script src="../themes/themes.js" defer></script><link rel="stylesheet" href="../themes/themes.css">
+<script src="../lang/lang.js" defer></script>
+<style>
+.tp-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.tp-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:430px;line-height:1.6;}
+.tp-board{position:relative;width:min(84vw,360px);height:min(84vw,360px);}
+.tp-board svg{position:absolute;inset:0;width:100%;height:100%;}
+.tp-node{position:absolute;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;cursor:pointer;transition:transform .1s;}
+.tp-node:hover{transform:scale(1.08);}
+.tp-node.sel{box-shadow:0 0 0 3px var(--accent);border-radius:50%;}
+.tp-node.hint{box-shadow:0 0 0 3px var(--green);border-radius:50%;}
+.tp-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;letter-spacing:1px;text-align:center;}
+.tp-turn b{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">⭕ TAPATAN</span>
+  <div class="h-btns"><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="tp-wrap">
+  <div class="tp-hint">Three Men's Morris. Place your 3 pieces, then <b>slide</b> one to a connected empty point each turn. Get <b>3 in a row</b> — across, down or diagonally — to win.</div>
+  <div class="tp-msg tp-turn" id="msg">Your move — place a piece (❌).</div>
+  <div class="tp-board" id="board"><svg id="lines" viewBox="0 0 100 100"></svg></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='tapatan';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+// nodes 0..8 in 3x3; positions in %:
+const POS=[[18,18],[50,18],[82,18],[18,50],[50,50],[82,50],[18,82],[50,82],[82,82]];
+const ADJ=[[1,3,4],[0,2,4],[1,4,5],[0,4,6],[0,1,2,3,5,6,7,8],[2,4,8],[3,4,7],[4,6,8],[4,5,7]];
+const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const EDGES=[[0,1],[1,2],[0,3],[1,4],[2,5],[3,4],[4,5],[3,6],[4,7],[5,8],[6,7],[7,8],[0,4],[2,4],[4,6],[4,8]];
+let board, phase, placed, turn, sel, over;
+function newGame(){ board=Array(9).fill(0); phase='place'; placed={1:0,2:0}; turn=1; sel=null; over=false; document.getElementById('win-overlay').classList.remove('show'); drawLines(); render(); setMsg('Your move — place a piece (❌).'); }
+function setMsg(t){ document.getElementById('msg').innerHTML=t; }
+function drawLines(){ const svg=document.getElementById('lines'); svg.innerHTML=''; EDGES.forEach(([a,b])=>{ const l=document.createElementNS('http://www.w3.org/2000/svg','line'); l.setAttribute('x1',POS[a][0]);l.setAttribute('y1',POS[a][1]);l.setAttribute('x2',POS[b][0]);l.setAttribute('y2',POS[b][1]); l.setAttribute('stroke','var(--border)');l.setAttribute('stroke-width','1.6'); svg.appendChild(l); }); }
+function winner(b){ for(const [a,c,d] of LINES)if(b[a]&&b[a]===b[c]&&b[c]===b[d])return b[a]; return 0; }
+function moves(b,p,ph,pl){ const res=[]; if(ph==='place'){ for(let i=0;i<9;i++)if(!b[i])res.push({to:i}); } else { for(let i=0;i<9;i++)if(b[i]===p)for(const j of ADJ[i])if(!b[j])res.push({from:i,to:j}); } return res; }
+function render(){ const bd=document.getElementById('board'); [...bd.querySelectorAll('.tp-node')].forEach(n=>n.remove());
+  for(let i=0;i<9;i++){ const d=document.createElement('div'); d.className='tp-node'+(sel===i?' sel':''); d.style.left=POS[i][0]+'%'; d.style.top=POS[i][1]+'%'; d.textContent=board[i]===1?'❌':board[i]===2?'⭕':''; d.onclick=()=>click(i); bd.appendChild(d); }
+  if(sel!==null){ for(const j of ADJ[sel])if(!board[j]){ const n=[...bd.querySelectorAll('.tp-node')][j]; n.classList.add('hint'); } }
+}
+function click(i){ if(over||turn!==1)return;
+  if(phase==='place'){ if(board[i])return; board[i]=1; placed[1]++; sfx('place'); afterMove(); }
+  else { if(board[i]===1){ sel=(sel===i?null:i); render(); return; } if(sel!==null && !board[i] && ADJ[sel].includes(i)){ board[i]=1; board[sel]=0; sel=null; sfx('place'); afterMove(); } }
+}
+function afterMove(){ // check phase transition
+  if(phase==='place' && placed[1]>=3 && placed[2]>=3) phase='move';
+  render(); const w=winner(board); if(w){ return finish(w); }
+  turn=2; setMsg('AI is thinking…'); setTimeout(aiMove, 450);
+}
+function aiMove(){ if(over)return; const mv=bestMove(); if(!mv){ return finish(1); } // AI stuck -> you win
+  if(mv.from!==undefined)board[mv.from]=0; board[mv.to]=2; if(phase==='place')placed[2]++; sfx('select');
+  if(phase==='place' && placed[1]>=3 && placed[2]>=3) phase='move';
+  render(); const w=winner(board); if(w)return finish(w);
+  turn=1; setMsg(phase==='place'?'Place a piece (❌).':'Slide one of your pieces.');
+}
+function bestMove(){ const pl={1:placed[1],2:placed[2]}; let best=null,bv=-1e9;
+  const ms=moves(board,2,phase,pl); for(const m of ms){ const v=evalMove(m); if(v>bv){ bv=v; best=m; } } return best; }
+function evalMove(m){ const b=board.slice(); const ph=phase; const pl={1:placed[1],2:placed[2]};
+  if(m.from!==undefined)b[m.from]=0; b[m.to]=2; if(ph==='place')pl[2]++;
+  const nph=(ph==='place'&&pl[1]>=3&&pl[2]>=3)?'move':ph;
+  return -negamax(b,1,nph,pl,3)+ (Math.random()*0.01);
+}
+function negamax(b,p,ph,pl,depth){ const w=winner(b); if(w)return w===p?1000:-1000; if(depth<=0)return heur(b,p);
+  const ms=moves(b,p,ph,pl); if(!ms.length)return -1000; let best=-1e9;
+  for(const m of ms){ const nb=b.slice(); if(m.from!==undefined)nb[m.from]=0; nb[m.to]=p; const npl={1:pl[1],2:pl[2]}; if(ph==='place')npl[p]++; const nph=(ph==='place'&&npl[1]>=3&&npl[2]>=3)?'move':ph;
+    best=Math.max(best,-negamax(nb,3-p,nph,npl,depth-1)); } return best; }
+function heur(b,p){ let s=0; for(const [a,c,d] of LINES){ const line=[b[a],b[c],b[d]]; const mine=line.filter(x=>x===p).length, opp=line.filter(x=>x===3-p).length; if(opp===0)s+=mine*mine; if(mine===0)s-=opp*opp; } if(b[4]===p)s+=1; else if(b[4]===3-p)s-=1; return s; }
+function finish(w){ over=true; const youWin=w===1; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 AI WINS!'; document.getElementById('win-sub').textContent=youWin?'Three in a row!':'The AI lined up three.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

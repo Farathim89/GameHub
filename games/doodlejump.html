@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doodle Jump</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.dj-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#doodle{background:linear-gradient(180deg,#10223e,#0a1428);border:2px solid var(--border);border-radius:12px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.dj-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🦘 DOODLE JUMP</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="dj-wrap">
+  <div class="dj-hint">Keep bouncing upward! Move with <b>← → / A D</b>, tilt, or drag. Green springs launch you higher.</div>
+  <canvas id="doodle" width="360" height="520"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='doodlejump';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('doodle'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, PW=38, PH=10, GRAV=0.32, JUMP=-11.2, SPRING=-18;
+let player, plats, score, best, camY, over, raf, left=false, right=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  document.getElementById('win-overlay').classList.remove('show');
+  player={x:W/2-16,y:H-80,w:32,h:32,vy:0,vx:0};
+  plats=[];
+  // starting platform under player + spread upward
+  plats.push({x:W/2-PW/2,y:H-40,type:0});
+  for(let i=1;i<14;i++) plats.push(makePlat(H-40-i*(H/13)));
+  score=0; camY=0; over=false;
+  document.getElementById('score').textContent=0;
+  document.getElementById('best').textContent=best;
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+}
+function makePlat(y){
+  const type = Math.random()<0.14 ? 1 : 0; // 1 = spring platform
+  return {x:Math.random()*(W-PW),y,type};
+}
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  // horizontal
+  if(left)player.vx=-5.2; else if(right)player.vx=5.2; else player.vx*=0.8;
+  player.x+=player.vx;
+  if(player.x<-player.w)player.x=W; if(player.x>W)player.x=-player.w;
+  // vertical
+  player.vy+=GRAV; player.y+=player.vy;
+  // platform collisions (only when falling)
+  if(player.vy>0){
+    for(const p of plats){
+      if(player.x+player.w>p.x && player.x<p.x+PW && player.y+player.h>p.y && player.y+player.h<p.y+PH+player.vy){
+        if(p.type===1){ player.vy=SPRING; sfx('coin'); }
+        else { player.vy=JUMP; sfx('flip'); }
+      }
+    }
+  }
+  // camera scroll: keep player in upper half
+  if(player.y<H*0.4){
+    const dy=H*0.4-player.y;
+    player.y+=dy; camY+=dy; score=Math.max(score,Math.floor(camY/10));
+    for(const p of plats)p.y+=dy;
+    document.getElementById('score').textContent=score;
+  }
+  // recycle platforms that fell below, spawn new ones on top
+  plats=plats.filter(p=>p.y<H+10);
+  while(plats.length<14){
+    let minY=Math.min(...plats.map(p=>p.y));
+    plats.push(makePlat(minY-(H/13)*(0.7+Math.random()*0.6)));
+  }
+  // death
+  if(player.y>H){ return gameOver(); }
+}
+function gameOver(){
+  over=true; sfx('lose');
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Height '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  for(const p of plats){
+    ctx.fillStyle=p.type===1?'#40d080':'#8a6a3a';
+    roundRect(p.x,p.y,PW,PH,4); ctx.fill();
+    if(p.type===1){ ctx.fillStyle='#2a9a58'; ctx.fillRect(p.x+PW/2-5,p.y-4,10,4); }
+  }
+  // player
+  ctx.fillStyle='#f0c040'; roundRect(player.x,player.y,player.w,player.h,8); ctx.fill();
+  ctx.fillStyle='#111'; ctx.fillRect(player.x+8,player.y+10,4,4); ctx.fillRect(player.x+player.w-12,player.y+10,4,4);
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'||e.key==='a'){left=true;e.preventDefault();} if(e.key==='ArrowRight'||e.key==='d'){right=true;e.preventDefault();} });
+document.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft'||e.key==='a')left=false; if(e.key==='ArrowRight'||e.key==='d')right=false; });
+cv.addEventListener('touchmove',e=>{e.preventDefault();const rect=cv.getBoundingClientRect();const tx=(e.touches[0].clientX-rect.left)*(W/rect.width);player.x=tx-player.w/2;},{passive:false});
+window.addEventListener('deviceorientation',e=>{ if(e.gamma!=null){ left=e.gamma<-4; right=e.gamma>4; } });
+newGame();
+</script>
+</body>
+</html>

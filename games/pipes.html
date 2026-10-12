@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pipes</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.pi-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.pi-grid{display:grid;gap:3px;background:var(--surface);padding:8px;border-radius:12px;border:2px solid var(--border);}
+.pi-cell{background:var(--surface2);border-radius:6px;cursor:pointer;transition:transform .08s;}
+.pi-cell:active{transform:scale(.93);}
+.pi-cell svg{display:block;}
+.pi-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:440px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🚰 PIPES</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()">
+      <option value="5" selected>5×5</option>
+      <option value="7">7×7</option>
+      <option value="9">9×9</option>
+    </select>
+    <div class="info-pill">MOVES: <span id="moves">0</span></div>
+    <div class="info-pill">BEST: <span id="best">—</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="pi-wrap">
+  <div class="pi-hint">Click tiles to rotate them. Connect <b style="color:var(--accent)">every pipe</b> to the glowing hub with no loose ends — lit pipes are connected.</div>
+  <div id="grid" class="pi-grid"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 CONNECTED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='pipes';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const N_BIT=1,E_BIT=2,S_BIT=4,W_BIT=8;
+const DIRS=[[N_BIT,-1,0,S_BIT],[E_BIT,0,1,W_BIT],[S_BIT,1,0,N_BIT],[W_BIT,0,-1,E_BIT]];
+let N=5, mask=[], src=[0,0], moves=0, over=false;
+
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  over=false; moves=0;
+  document.getElementById('win-overlay').classList.remove('show');
+  generate();
+  do{ for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const k=0|Math.random()*4; for(let i=0;i<k;i++) mask[r][c]=rot(mask[r][c]); } }
+  while(checkSolved()); // ensure it starts unsolved
+  const b=window.GH?GH.score.get(GAME,'best_'+N):null;
+  document.getElementById('best').textContent=b?b+' moves':'—';
+  render();
+}
+function generate(){
+  mask=Array.from({length:N},()=>Array(N).fill(0));
+  const vis=Array.from({length:N},()=>Array(N).fill(false));
+  src=[(N/2)|0,(N/2)|0];
+  const st=[src]; vis[src[0]][src[1]]=true;
+  while(st.length){
+    const [r,c]=st[st.length-1];
+    const opts=DIRS.filter(([bit,dr,dc])=>{const nr=r+dr,nc=c+dc; return nr>=0&&nr<N&&nc>=0&&nc<N&&!vis[nr][nc];});
+    if(!opts.length){ st.pop(); continue; }
+    const [bit,dr,dc,opp]=opts[0|Math.random()*opts.length];
+    const nr=r+dr,nc=c+dc;
+    mask[r][c]|=bit; mask[nr][nc]|=opp; vis[nr][nc]=true; st.push([nr,nc]);
+  }
+}
+function rot(m){ return ((m<<1)|(m>>3))&15; }
+function clickCell(r,c){
+  if(over) return;
+  mask[r][c]=rot(mask[r][c]); moves++; sfx('move'); render();
+  if(checkSolved()) win();
+}
+function litSet(){
+  const lit=new Set(); if(!mask.length) return lit;
+  const seen=Array.from({length:N},()=>Array(N).fill(false));
+  const st=[src]; seen[src[0]][src[1]]=true; lit.add(src[0]+','+src[1]);
+  while(st.length){ const [r,c]=st.pop(); for(const [bit,dr,dc,opp] of DIRS){ if(mask[r][c]&bit){ const nr=r+dr,nc=c+dc; if(nr>=0&&nr<N&&nc>=0&&nc<N&&(mask[nr][nc]&opp)&&!seen[nr][nc]){ seen[nr][nc]=true; lit.add(nr+','+nc); st.push([nr,nc]); } } } }
+  return lit;
+}
+function checkSolved(){
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    for(const [bit,dr,dc,opp] of DIRS){ if(mask[r][c]&bit){ const nr=r+dr,nc=c+dc; if(nr<0||nr>=N||nc<0||nc>=N) return false; if(!(mask[nr][nc]&opp)) return false; } }
+  }
+  return litSet().size===N*N;
+}
+function render(){
+  const g=document.getElementById('grid'); if(!g)return;
+  const cell=Math.floor(Math.min(window.innerWidth-40,440)/N);
+  g.style.gridTemplateColumns=`repeat(${N},${cell}px)`;
+  g.innerHTML='';
+  const lit=litSet();
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div'); d.className='pi-cell'; d.style.width=cell+'px'; d.style.height=cell+'px';
+    d.innerHTML=pipeSVG(mask[r][c],cell,r===src[0]&&c===src[1],lit.has(r+','+c));
+    d.onclick=()=>clickCell(r,c);
+    g.appendChild(d);
+  }
+  document.getElementById('moves').textContent=moves;
+}
+function pipeSVG(m,sz,isSrc,lit){
+  const cx=sz/2; const stroke=lit?'#40c0a0':'#6a6a7a';
+  const ends=[];
+  if(m&N_BIT)ends.push(`<line x1="${cx}" y1="${cx}" x2="${cx}" y2="0"/>`);
+  if(m&E_BIT)ends.push(`<line x1="${cx}" y1="${cx}" x2="${sz}" y2="${cx}"/>`);
+  if(m&S_BIT)ends.push(`<line x1="${cx}" y1="${cx}" x2="${cx}" y2="${sz}"/>`);
+  if(m&W_BIT)ends.push(`<line x1="${cx}" y1="${cx}" x2="0" y2="${cx}"/>`);
+  const hub = isSrc? `<circle cx="${cx}" cy="${cx}" r="${sz*0.2}" fill="#f0c040"/>` : `<circle cx="${cx}" cy="${cx}" r="${sz*0.11}" fill="${stroke}"/>`;
+  return `<svg width="${sz}" height="${sz}"><g stroke="${stroke}" stroke-width="${Math.max(4,sz*0.13)}" stroke-linecap="round" fill="none">${ends.join('')}</g>${hub}</svg>`;
+}
+function win(){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best_'+N,moves,'low'):{value:moves,isBest:false};
+  document.getElementById('best').textContent=r.value+' moves';
+  document.getElementById('win-sub').textContent='Connected in '+moves+' moves'+(r.isBest?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+window.addEventListener('resize',()=>{ if(mask.length) render(); });
+newGame();
+</script>
+</body>
+</html>

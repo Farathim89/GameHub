@@ -1,0 +1,38 @@
+GAME HUB - PORTABLE APP
+=======================
+Two ways to run it:
+  1) Double-click  GameHub.exe   (recommended - one file, no Python needed)
+  2) Double-click  "Start GameHub.bat"  (the no-exe launcher)
+
+Both start a tiny local server and open the hub in an app window, and both
+shut the server down automatically when you close the window.
+
+How it stays portable (like Pinokio apps):
+- Everything lives in this folder. Copy it to a USB stick or another
+  Windows 10/11 PC and it just works.
+- FIRST RUN on a PC without Python: the launcher downloads the official
+  portable Python (~11 MB) ONCE into  runtime\python\  inside this
+  folder. Nothing is installed on the PC itself - no registry entries,
+  no admin rights needed. Delete the runtime folder to remove it.
+- If that download isn't possible (offline), it silently falls back to
+  a built-in PowerShell server - the games still work exactly the same.
+- The app window opens in Chrome app mode (or Edge if Chrome is
+  missing). Closing the window automatically shuts the server down.
+- No external requirements: the games use zero frameworks, the server
+  uses only the Python/PowerShell standard library.
+
+GameHub.exe serves the games sitting next to it, so you can still edit or
+add games in games\ without rebuilding. To rebuild the exe after changes,
+double-click build_exe.bat (needs Python + "pip install pyinstaller").
+
+Folder guide:
+  GameHub.exe   one-click app launcher (built from launcher.py)
+  games\        the 25 games (one file each)
+  themes\       theme system (add your own themes here)
+  backgrounds\  wallpaper images for the "My Wallpaper" theme
+  icons\        app icons for the installable PWA (+ gamehub.ico for the exe)
+  runtime\      portable Python (auto-created on first run if needed)
+  launcher.py   source for GameHub.exe (server + opens the app window)
+  build_exe.bat rebuilds GameHub.exe
+  server.py     local server (Python)
+  server.ps1    local server (PowerShell fallback)

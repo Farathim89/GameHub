@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mastermind</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.mm-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.mm-rows{display:flex;flex-direction:column;gap:7px;background:var(--surface);padding:12px;border-radius:12px;border:2px solid var(--border);}
+.mm-row{display:flex;align-items:center;gap:10px;}
+.mm-pegs{display:flex;gap:7px;}
+.mm-peg{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.2);background:var(--surface2);}
+.mm-peg.empty{border-style:dashed;border-color:#444;}
+.mm-fb{display:grid;grid-template-columns:repeat(2,10px);gap:3px;width:23px;}
+.mm-fb i{width:10px;height:10px;border-radius:50%;background:#2a2a2a;}
+.mm-fb i.black{background:#f0f0f0;}
+.mm-fb i.white{background:#888;}
+.mm-cur{display:flex;align-items:center;gap:10px;background:var(--surface2);padding:10px 12px;border-radius:12px;border:2px solid var(--accent);}
+.mm-pal{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.mm-swatch{width:38px;height:38px;border-radius:50%;border:3px solid rgba(255,255,255,.25);cursor:pointer;transition:transform .12s;}
+.mm-swatch:hover{transform:scale(1.12);}
+.mm-cur .mm-peg{cursor:pointer;}
+.mm-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+.mm-guessbtn{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;padding:9px 18px;border-radius:8px;border:2px solid var(--green);color:var(--green);background:var(--surface);cursor:pointer;letter-spacing:1px;}
+.mm-guessbtn:disabled{opacity:.4;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🎯 MASTERMIND</span>
+  <div class="h-btns">
+    <div class="info-pill">TRY: <span id="tries">0</span>/10</div>
+    <div class="info-pill">WON: <span id="wins">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="mm-wrap">
+  <div class="mm-hint">Crack the hidden 4-colour code in 10 guesses.<br>⚪ white peg = right colour, wrong spot · ⚫ white-filled peg = right colour &amp; spot.</div>
+  <div class="mm-rows" id="rows"></div>
+  <div class="mm-cur" id="cur"></div>
+  <div class="mm-pal" id="pal"></div>
+  <button class="mm-guessbtn" id="guessbtn" onclick="submitGuess()">✓ GUESS</button>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 CRACKED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='mastermind';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const COLORS=['#e05050','#f0a040','#f0c040','#40c0a0','#5090e0','#c080e0'];
+const LEN=4, MAX=10;
+let code=[], guesses=[], cur=[], over=false;
+
+function newGame(){
+  code=Array.from({length:LEN},()=>0|Math.random()*COLORS.length);
+  guesses=[]; cur=[]; over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  buildPal(); render();
+}
+function buildPal(){
+  const p=document.getElementById('pal'); p.innerHTML='';
+  COLORS.forEach((c,i)=>{ const s=document.createElement('div'); s.className='mm-swatch'; s.style.background=c; s.onclick=()=>addPeg(i); p.appendChild(s); });
+}
+function addPeg(i){ if(over||cur.length>=LEN)return; cur.push(i); sfx('select'); render(); }
+function render(){
+  const rows=document.getElementById('rows'); rows.innerHTML='';
+  guesses.forEach(g=>{
+    const row=document.createElement('div'); row.className='mm-row';
+    let h='<div class="mm-pegs">';
+    g.guess.forEach(c=>h+='<div class="mm-peg" style="background:'+COLORS[c]+'"></div>');
+    h+='</div><div class="mm-fb">';
+    for(let k=0;k<g.black;k++)h+='<i class="black"></i>';
+    for(let k=0;k<g.white;k++)h+='<i class="white"></i>';
+    for(let k=g.black+g.white;k<LEN;k++)h+='<i></i>';
+    h+='</div>';
+    row.innerHTML=h; rows.appendChild(row);
+  });
+  // current guess editable row
+  const curEl=document.getElementById('cur'); let ch='<div class="mm-pegs">';
+  for(let i=0;i<LEN;i++){
+    if(i<cur.length) ch+='<div class="mm-peg" style="background:'+COLORS[cur[i]]+'" onclick="removePeg('+i+')"></div>';
+    else ch+='<div class="mm-peg empty"></div>';
+  }
+  ch+='</div>';
+  curEl.innerHTML=ch;
+  document.getElementById('tries').textContent=guesses.length;
+  document.getElementById('guessbtn').disabled = cur.length!==LEN || over;
+}
+function removePeg(i){ if(over)return; cur.splice(i,1); render(); }
+function submitGuess(){
+  if(over||cur.length!==LEN) return;
+  const fb=score(cur,code);
+  guesses.push({guess:cur.slice(),black:fb.black,white:fb.white});
+  sfx('place');
+  if(fb.black===LEN){ cur=[]; render(); return win(); }
+  cur=[];
+  if(guesses.length>=MAX){ render(); return lose(); }
+  render();
+}
+function score(guess,secret){
+  let black=0,white=0;
+  const sc=secret.slice(), gc=guess.slice();
+  for(let i=0;i<LEN;i++){ if(gc[i]===sc[i]){ black++; sc[i]=-1; gc[i]=-2; } }
+  for(let i=0;i<LEN;i++){ if(gc[i]<0)continue; const j=sc.indexOf(gc[i]); if(j>=0){ white++; sc[j]=-1; } }
+  return {black,white};
+}
+function win(){
+  over=true; sfx('win');
+  const w=window.GH?GH.score.inc(GAME,'wins',1):0;
+  document.getElementById('wins').textContent=w;
+  if(window.GH)GH.score.best(GAME,'bestTries',guesses.length,'low');
+  document.getElementById('win-msg').textContent='🏆 CRACKED!';
+  document.getElementById('win-sub').textContent='Solved in '+guesses.length+' guess'+(guesses.length===1?'':'es')+'!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function lose(){
+  over=true;
+  document.getElementById('win-msg').textContent='💥 OUT OF TRIES';
+  document.getElementById('win-sub').textContent='The code was: '+code.map(c=>'●').join(' ');
+  // reveal code colours in the overlay sub via emoji dots
+  const names=['🔴','🟠','🟡','🟢','🔵','🟣'];
+  document.getElementById('win-sub').textContent='The code was  '+code.map(c=>names[c]).join(' ');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+newGame();
+</script>
+</body>
+</html>

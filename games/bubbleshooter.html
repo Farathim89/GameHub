@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bubble Shooter</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.bs-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#bubbles{background:#0a0a16;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;cursor:crosshair;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.bs-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">🫧 BUBBLE SHOOTER</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="bs-wrap">
+  <div class="bs-hint">Aim with the mouse / finger and click to shoot. Match <b>3+</b> same-colour bubbles to pop them!</div>
+  <canvas id="bubbles" width="420" height="500"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 CLEARED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='bubbleshooter';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('bubbles'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, R=18, COLS=Math.floor(W/(2*R));
+const ROWH=2*R*0.86, TOP=R+2, DEADLINE=H-70;
+const COLORS=['#e05050','#f0c040','#40c0a0','#5090e0','#c080e0','#f090c0'];
+let grid, cur, next, shooting, score, best, over, raf, aimX=W/2, aimY=0;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  score=0; over=false; shooting=null;
+  grid=[];
+  const startRows=5;
+  for(let r=0;r<startRows;r++){ grid[r]=[]; const cols=colsIn(r); for(let c=0;c<cols;c++) grid[r][c]=0|Math.random()*4; }
+  cur=randColor(); next=randColor();
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('best').textContent=best;
+  updateHud();
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+}
+function colsIn(r){ return r%2===0?COLS:COLS-1; }
+function cellXY(r,c){ const x=R + (r%2?R:0) + c*2*R; const y=TOP + r*ROWH + R; return [x,y]; }
+function presentColors(){ const s=new Set(); for(const row of grid) if(row) for(const v of row) if(v!=null) s.add(v); return [...s]; }
+function randColor(){ const p=presentColors(); return p.length? p[0|Math.random()*p.length] : 0|Math.random()*COLORS.length; }
+
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  if(!shooting) return;
+  const s=shooting; const steps=4;
+  for(let i=0;i<steps;i++){
+    s.x+=s.vx/steps; s.y+=s.vy/steps;
+    if(s.x<R){s.x=R;s.vx*=-1;} if(s.x>W-R){s.x=W-R;s.vx*=-1;}
+    if(s.y<=TOP+R){ snap(s); return; }
+    // collide with existing bubbles
+    for(let r=0;r<grid.length;r++){ if(!grid[r])continue; for(let c=0;c<grid[r].length;c++){ if(grid[r][c]==null)continue; const [bx,by]=cellXY(r,c); if((s.x-bx)**2+(s.y-by)**2 < (2*R-3)**2){ snap(s); return; } } }
+  }
+}
+function snap(s){
+  // find nearest empty grid cell
+  let bestR=0,bestC=0,bestD=1e9;
+  for(let r=0;r<grid.length+1;r++){ const cols=colsIn(r); for(let c=0;c<cols;c++){ if(grid[r]&&grid[r][c]!=null)continue; const [x,y]=cellXY(r,c); const d=(s.x-x)**2+(s.y-y)**2; if(d<bestD){bestD=d;bestR=r;bestC=c;} } }
+  if(!grid[bestR]) grid[bestR]=[];
+  grid[bestR][bestC]=s.color;
+  shooting=null;
+  const popped=resolve(bestR,bestC);
+  cur=next; next=randColor();
+  const [,ly]=cellXY(bestR,bestC);
+  if(!popped && ly>DEADLINE){ return gameOver(false); }
+  if(presentColors().length===0){ return gameOver(true); }
+  updateHud();
+}
+function neighbors(r,c){
+  const odd=r%2;
+  const list=[[r,c-1],[r,c+1],[r-1,c],[r-1,c+(odd?1:-1)],[r+1,c],[r+1,c+(odd?1:-1)]];
+  return list.filter(([rr,cc])=>rr>=0&&rr<grid.length&&grid[rr]&&cc>=0&&cc<grid[rr].length);
+}
+function resolve(r,c){
+  const color=grid[r][c];
+  // flood same color
+  const seen=new Set([r+','+c]); const st=[[r,c]]; const cluster=[[r,c]];
+  while(st.length){ const [cr,cc]=st.pop(); for(const [nr,nc] of neighbors(cr,cc)){ const k=nr+','+nc; if(!seen.has(k)&&grid[nr][nc]===color){ seen.add(k); st.push([nr,nc]); cluster.push([nr,nc]); } } }
+  if(cluster.length<3) return false;
+  cluster.forEach(([rr,cc])=>grid[rr][cc]=null); score+=cluster.length*10; sfx('pop');
+  dropFloating();
+  return true;
+}
+function dropFloating(){
+  // bubbles connected to top row survive
+  const safe=new Set(); const st=[];
+  if(grid[0]) for(let c=0;c<grid[0].length;c++) if(grid[0][c]!=null){ safe.add('0,'+c); st.push([0,c]); }
+  while(st.length){ const [r,c]=st.pop(); for(const [nr,nc] of neighbors(r,c)){ const k=nr+','+nc; if(!safe.has(k)&&grid[nr][nc]!=null){ safe.add(k); st.push([nr,nc]); } } }
+  let dropped=0;
+  for(let r=0;r<grid.length;r++){ if(!grid[r])continue; for(let c=0;c<grid[r].length;c++){ if(grid[r][c]!=null&&!safe.has(r+','+c)){ grid[r][c]=null; dropped++; } } }
+  if(dropped){ score+=dropped*20; }
+}
+function shoot(tx,ty){
+  if(over||shooting) return;
+  const sx=W/2, sy=H-30; let dx=tx-sx, dy=ty-sy; const len=Math.hypot(dx,dy)||1;
+  if(dy>-4) return; // must aim upward
+  const sp=9; shooting={x:sx,y:sy,vx:dx/len*sp,vy:dy/len*sp,color:cur}; sfx('select');
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // deadline
+  ctx.strokeStyle='rgba(224,80,80,.4)'; ctx.setLineDash([6,6]); ctx.beginPath(); ctx.moveTo(0,DEADLINE); ctx.lineTo(W,DEADLINE); ctx.stroke(); ctx.setLineDash([]);
+  for(let r=0;r<grid.length;r++){ if(!grid[r])continue; for(let c=0;c<grid[r].length;c++){ if(grid[r][c]==null)continue; const [x,y]=cellXY(r,c); bubble(x,y,grid[r][c]); } }
+  // aim guide
+  if(!shooting){ const sx=W/2, sy=H-30; let dx=aimX-sx, dy=aimY-sy; if(dy<-4){ const len=Math.hypot(dx,dy); ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.setLineDash([4,6]); ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+dx/len*120,sy+dy/len*120); ctx.stroke(); ctx.setLineDash([]); } }
+  // shooter + next
+  bubble(W/2,H-30,cur);
+  bubble(W/2+40,H-22,next,0.7);
+  if(shooting) bubble(shooting.x,shooting.y,shooting.color);
+}
+function bubble(x,y,color,scale){ const r=R*(scale||1); ctx.fillStyle=COLORS[color]; ctx.beginPath(); ctx.arc(x,y,r-1,0,7); ctx.fill(); ctx.fillStyle='rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(x-r*0.3,y-r*0.3,r*0.28,0,7); ctx.fill(); }
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('best').textContent=best; }
+function gameOver(won){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-msg').textContent=won?'🏆 CLEARED!':'💥 GAME OVER';
+  document.getElementById('win-sub').textContent='Score '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+cv.addEventListener('mousemove',e=>{ const rect=cv.getBoundingClientRect(); aimX=(e.clientX-rect.left)*(W/rect.width); aimY=(e.clientY-rect.top)*(H/rect.height); });
+cv.addEventListener('click',e=>{ const rect=cv.getBoundingClientRect(); shoot((e.clientX-rect.left)*(W/rect.width),(e.clientY-rect.top)*(H/rect.height)); });
+cv.addEventListener('touchmove',e=>{e.preventDefault(); const rect=cv.getBoundingClientRect(); aimX=(e.touches[0].clientX-rect.left)*(W/rect.width); aimY=(e.touches[0].clientY-rect.top)*(H/rect.height);},{passive:false});
+cv.addEventListener('touchend',e=>{e.preventDefault(); shoot(aimX,aimY);},{passive:false});
+newGame();
+</script>
+</body>
+</html>

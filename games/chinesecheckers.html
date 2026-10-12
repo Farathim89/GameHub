@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chinese Checkers</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.cc-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px;}
+.cc-board{display:grid;gap:3px;background:linear-gradient(145deg,#2a1c3a,#160e24);border:3px solid #4a3a6a;border-radius:12px;padding:6px;}
+.cc-cell{border-radius:50%;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
+.cc-cell.home-p{background:rgba(240,192,64,.12);}
+.cc-cell.home-a{background:rgba(80,144,224,.12);}
+.cc-peg{width:76%;height:76%;border-radius:50%;}
+.cc-peg.p{background:radial-gradient(circle at 35% 30%,#ffe890,#e0a020);}
+.cc-peg.a{background:radial-gradient(circle at 35% 30%,#90c0ff,#3060c0);}
+.cc-cell.sel{box-shadow:inset 0 0 0 3px var(--accent);}
+.cc-cell.dest::after{content:'';width:34%;height:34%;border-radius:50%;background:rgba(64,192,160,.7);position:absolute;}
+.cc-status{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;min-height:22px;letter-spacing:1px;}
+.cc-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:440px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">✦ CHINESE CHECKERS</span>
+  <div class="h-btns">
+    <select id="mode-sel" onchange="newGame()">
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai" selected>VS AI</option>
+    </select>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="cc-wrap">
+  <div class="cc-status" id="status">Your move</div>
+  <div class="cc-hint">Move a peg to an empty neighbour, or hop over pegs (chain hops!). Get all your pegs into the far corner first.</div>
+  <div id="board" class="cc-board"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='chinesecheckers';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const N=8, HS=4; // board 8x8, home triangle size 4 (10 pegs)
+const DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+let bd=[], turn=0, mode='ai', sel=null, dests=[], over=false, busy=false, pHome=[], aHome=[];
+// bd[r][c]: 0 empty, 1 player, 2 ai
+
+function inHomeP(r,c){ return r>=N-HS && c<=(N-1-r); }
+function inHomeA(r,c){ return r<HS && c>=(N-1-r); }
+function newGame(){
+  mode=document.getElementById('mode-sel').value;
+  bd=Array.from({length:N},()=>Array(N).fill(0));
+  pHome=[]; aHome=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ if(inHomeP(r,c)){bd[r][c]=1;pHome.push([r,c]);} else if(inHomeA(r,c)){bd[r][c]=2;aHome.push([r,c]);} }
+  turn=0; sel=null; dests=[]; over=false; busy=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  render(); setStatus();
+}
+function inB(r,c){ return r>=0&&r<N&&c>=0&&c<N; }
+function legalFor(r,c){
+  const out=new Set(); // key "r,c"
+  // steps
+  for(const [dr,dc] of DIRS){ const nr=r+dr,nc=c+dc; if(inB(nr,nc)&&bd[nr][nc]===0) out.add(nr+','+nc); }
+  // hop chains
+  const seen=new Set([r+','+c]); const st=[[r,c]];
+  while(st.length){ const [cr,cc]=st.pop();
+    for(const [dr,dc] of DIRS){ const mr=cr+dr,mc=cc+dc, lr=cr+2*dr,lc=cc+2*dc;
+      if(inB(lr,lc)&&bd[mr][mc]!==0&&bd[lr][lc]===0){ const k=lr+','+lc; if(!seen.has(k)){ seen.add(k); out.add(k); st.push([lr,lc]); } }
+    }
+  }
+  out.delete(r+','+c);
+  return [...out].map(s=>s.split(',').map(Number));
+}
+function click(r,c){
+  if(over||busy) return;
+  if(mode==='ai'&&turn===1) return;
+  const me=turn===0?1:2;
+  if(bd[r][c]===me){ sel=[r,c]; dests=legalFor(r,c); sfx('select'); render(); return; }
+  if(sel&&dests.some(([dr,dc])=>dr===r&&dc===c)){ doMove(sel,[r,c]); }
+}
+function doMove(from,to){
+  const me=turn===0?1:2;
+  bd[to[0]][to[1]]=me; bd[from[0]][from[1]]=0; sel=null; dests=[]; sfx('place');
+  render();
+  if(won(me)) return win(me);
+  turn=1-turn; setStatus();
+  if(mode==='ai'&&turn===1&&!over){ busy=true; setTimeout(aiMove,500); }
+}
+function won(me){ const home=me===1?aHome:pHome; return home.every(([r,c])=>bd[r][c]===me); }
+function dist(r,c,targets){ let m=1e9; for(const [tr,tc] of targets) m=Math.min(m,Math.max(Math.abs(tr-r),Math.abs(tc-c))); return m; }
+function aiMove(){
+  if(over) return;
+  // greedy: pick move that most reduces total chebyshev distance of AI pegs to player-home targets
+  const targets=pHome;
+  let best=null, bestGain=-1e9;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ if(bd[r][c]!==2)continue;
+    if(inHomeP(r,c)) continue; // don't move pegs already home out... actually target is pHome; if already there skip moving it out
+    const d0=dist(r,c,targets);
+    for(const [tr,tc] of legalFor(r,c)){
+      if(inHomeA(tr,tc)&&!inHomeA(r,c)) continue; // don't move backward into own home
+      const d1=dist(tr,tc,targets);
+      let gain=d0-d1;
+      gain += (Math.random()*0.3);
+      if(inHomeP(tr,tc)) gain+=0.5; // bonus for landing in goal
+      if(gain>bestGain){ bestGain=gain; best={from:[r,c],to:[tr,tc]}; }
+    }
+  }
+  busy=false;
+  if(!best){ turn=0; setStatus(); return; }
+  doMove(best.from,best.to);
+}
+function render(){
+  const b=document.getElementById('board'); if(!b)return;
+  const cell=Math.floor(Math.min(window.innerWidth-40,420)/N);
+  b.style.gridTemplateColumns=`repeat(${N},${cell}px)`;
+  b.innerHTML='';
+  const destSet=new Set(dests.map(d=>d.join(',')));
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div');
+    d.className='cc-cell'+(inHomeP(r,c)?' home-p':'')+(inHomeA(r,c)?' home-a':'')+(sel&&sel[0]===r&&sel[1]===c?' sel':'')+(destSet.has(r+','+c)?' dest':'');
+    d.style.width=cell+'px'; d.style.height=cell+'px';
+    if(bd[r][c]){ const p=document.createElement('div'); p.className='cc-peg '+(bd[r][c]===1?'p':'a'); d.appendChild(p); }
+    d.onclick=()=>click(r,c);
+    b.appendChild(d);
+  }
+}
+function setStatus(){ if(over)return; const el=document.getElementById('status'); el.textContent = (mode==='ai'&&turn===1)?'🤖 AI thinking…':(turn===0?'🟡 Your move':'🔵 Player 2 move'); el.style.color=turn===0?'#f0c040':'#5090e0'; }
+function win(me){ over=true; const youWin=me===1; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent = youWin?'🏆 YOU WIN!':(mode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!');
+  document.getElementById('win-sub').textContent='All pegs reached the far corner!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+window.addEventListener('resize',()=>{ if(bd.length) render(); });
+newGame();
+</script>
+</body>
+</html>

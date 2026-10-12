@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Battleship</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.bs-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+.bs-boards{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;}
+.bs-board{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.bs-lbl{font-family:'Orbitron',monospace;font-size:12px;letter-spacing:2px;}
+.bs-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:2px;background:var(--border);padding:2px;border-radius:6px;}
+.bs-cell{width:28px;height:28px;background:#123049;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:background .12s;}
+.bs-cell.enemy:hover{background:#1c4668;}
+.bs-cell.ship{background:#3a4a58;}
+.bs-cell.hit{background:#e05050;}
+.bs-cell.miss{background:#1a2530;color:#567;}
+.bs-cell.sunk{background:#8a2020;}
+.bs-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;min-height:20px;}
+@media(max-width:620px){.bs-cell{width:22px;height:22px;font-size:12px;}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🚢 BATTLESHIP</span>
+  <div class="h-btns">
+    <div class="info-pill">WINS: <span id="wins">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="bs-wrap">
+  <div class="bs-hint" id="hint">Click the enemy waters to fire. Sink all 5 ships!</div>
+  <div class="bs-boards">
+    <div class="bs-board"><div class="bs-lbl" style="color:#e05050">🎯 ENEMY</div><div id="enemy" class="bs-grid"></div></div>
+    <div class="bs-board"><div class="bs-lbl" style="color:#40c0a0">🛡️ YOUR FLEET</div><div id="mine" class="bs-grid"></div></div>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 VICTORY!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='battleship';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SIZE=10, SHIPS=[5,4,3,3,2];
+let eBoard, mBoard, eShots, mShots, over, turn, aiQueue, aiTried;
+
+function emptyBoard(){ return Array.from({length:SIZE},()=>Array(SIZE).fill(0)); } // 0 water, >0 ship id
+function place(board){
+  let id=1;
+  for(const len of SHIPS){
+    let ok=false;
+    while(!ok){
+      const horiz=Math.random()<0.5;
+      const r=0|Math.random()*SIZE, c=0|Math.random()*SIZE;
+      const cells=[];
+      for(let k=0;k<len;k++){ const rr=r+(horiz?0:k), cc=c+(horiz?k:0); if(rr>=SIZE||cc>=SIZE){cells.length=0;break;} cells.push([rr,cc]); }
+      if(!cells.length) continue;
+      // no overlap or adjacency
+      if(cells.some(([rr,cc])=>{ for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const a=rr+dr,b=cc+dc; if(a>=0&&a<SIZE&&b>=0&&b<SIZE&&board[a][b])return true;} return false; })) continue;
+      cells.forEach(([rr,cc])=>board[rr][cc]=id); ok=true; id++;
+    }
+  }
+}
+function newGame(){
+  eBoard=emptyBoard(); mBoard=emptyBoard();
+  place(eBoard); place(mBoard);
+  eShots=Array.from({length:SIZE},()=>Array(SIZE).fill(0)); // player's shots at enemy: 0 none,1 miss,2 hit
+  mShots=Array.from({length:SIZE},()=>Array(SIZE).fill(0)); // ai's shots at player
+  over=false; turn='you'; aiQueue=[]; aiTried=Array.from({length:SIZE},()=>Array(SIZE).fill(false));
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  document.getElementById('hint').textContent='Click the enemy waters to fire!';
+  render();
+}
+function shipCells(board,id){ const out=[]; for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(board[r][c]===id)out.push([r,c]); return out; }
+function sunk(board,shots,id){ return shipCells(board,id).every(([r,c])=>shots[r][c]===2); }
+function allSunk(board,shots){ const ids=new Set(); for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(board[r][c])ids.add(board[r][c]); return [...ids].every(id=>sunk(board,shots,id)); }
+
+function fireEnemy(r,c){
+  if(over||turn!=='you'||eShots[r][c]) return;
+  if(eBoard[r][c]){ eShots[r][c]=2; sfx('hit');
+    const id=eBoard[r][c];
+    if(sunk(eBoard,eShots,id)){ document.getElementById('hint').textContent='💥 You sank an enemy ship!'; }
+    else document.getElementById('hint').textContent='🎯 Hit!';
+  } else { eShots[r][c]=1; sfx('select'); document.getElementById('hint').textContent='Splash — miss.'; }
+  render();
+  if(allSunk(eBoard,eShots)) return endGame(true);
+  turn='ai'; setTimeout(aiTurn,550);
+}
+function aiTurn(){
+  if(over) return;
+  let r,c;
+  // target mode: use queued neighbors of a hit
+  while(aiQueue.length){ const p=aiQueue.shift(); if(!aiTried[p[0]][p[1]]){ r=p[0]; c=p[1]; break; } }
+  if(r===undefined){ // hunt: random untried (checkerboard bias)
+    const cand=[]; for(let i=0;i<SIZE;i++)for(let j=0;j<SIZE;j++) if(!aiTried[i][j]&&(i+j)%2===0) cand.push([i,j]);
+    const pool=cand.length?cand:(()=>{const a=[];for(let i=0;i<SIZE;i++)for(let j=0;j<SIZE;j++)if(!aiTried[i][j])a.push([i,j]);return a;})();
+    if(!pool.length) return;
+    [r,c]=pool[0|Math.random()*pool.length];
+  }
+  aiTried[r][c]=true;
+  if(mBoard[r][c]){ mShots[r][c]=2; sfx('hit');
+    // queue neighbors
+    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([a,b])=>{ if(a>=0&&a<SIZE&&b>=0&&b<SIZE&&!aiTried[a][b])aiQueue.push([a,b]); });
+  } else { mShots[r][c]=1; }
+  render();
+  if(allSunk(mBoard,mShots)) return endGame(false);
+  turn='you';
+}
+function render(){
+  const e=document.getElementById('enemy'); e.innerHTML='';
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+    const d=document.createElement('div'); d.className='bs-cell enemy';
+    const s=eShots[r][c];
+    if(s===2){ const id=eBoard[r][c]; d.className='bs-cell '+(sunk(eBoard,eShots,id)?'sunk':'hit'); d.textContent='✕'; }
+    else if(s===1){ d.className='bs-cell miss'; d.textContent='•'; }
+    d.onclick=()=>fireEnemy(r,c);
+    e.appendChild(d);
+  }
+  const m=document.getElementById('mine'); m.innerHTML='';
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+    const d=document.createElement('div'); d.className='bs-cell';
+    const s=mShots[r][c];
+    if(mBoard[r][c]) d.classList.add('ship');
+    if(s===2){ const id=mBoard[r][c]; d.className='bs-cell '+(id&&sunk(mBoard,mShots,id)?'sunk':'hit'); d.textContent='✕'; }
+    else if(s===1){ d.className='bs-cell miss'; d.textContent='•'; }
+    m.appendChild(d);
+  }
+}
+function endGame(won){
+  over=true;
+  if(won&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  document.getElementById('win-msg').textContent=won?'🏆 VICTORY!':'💥 DEFEATED';
+  document.getElementById('win-sub').textContent=won?'You sank the enemy fleet!':'Your fleet was sunk.';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+newGame();
+</script>
+</body>
+</html>

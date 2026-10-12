@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Word Ladder</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.wl-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.wl-goal{display:flex;gap:16px;align-items:center;font-family:'Orbitron',monospace;font-weight:900;}
+.wl-word{display:flex;gap:4px;}
+.wl-l{width:40px;height:46px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:22px;background:var(--surface2);border:2px solid var(--border);}
+.wl-l.start{background:rgba(80,144,224,.25);border-color:var(--blue);}
+.wl-l.end{background:rgba(64,192,160,.25);border-color:var(--green);}
+.wl-l.changed{background:rgba(240,192,64,.2);border-color:var(--accent);}
+.wl-ladder{display:flex;flex-direction:column;gap:5px;align-items:center;}
+.wl-input{font-family:'Orbitron',monospace;font-weight:900;font-size:22px;text-transform:uppercase;width:160px;text-align:center;letter-spacing:8px;padding:8px;background:var(--surface);border:2px solid var(--accent);color:var(--text);border-radius:8px;outline:none;}
+.wl-msg{font-family:'Orbitron',monospace;font-size:13px;min-height:20px;letter-spacing:1px;}
+.wl-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:420px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🪜 WORD LADDER</span>
+  <div class="h-btns"><div class="info-pill">STEPS: <span id="steps">0</span></div><button class="hbtn" onclick="hint()">💡 HINT</button><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="wl-wrap">
+  <div class="wl-goal"><span id="startW" style="color:var(--blue)"></span><span style="color:var(--dim)">→</span><span id="endW" style="color:var(--green)"></span></div>
+  <div class="wl-hint">Change <b>one letter at a time</b> to turn the top word into the bottom word. Every rung must be a real word.</div>
+  <div class="wl-ladder" id="ladder"></div>
+  <input class="wl-input" id="inp" maxlength="4" placeholder="····" autocomplete="off">
+  <div class="wl-msg" id="msg"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='wordladder';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const WL="ABLE ACID AGED AIDE AIMS ALSO ALTO ARCH ARMY AUNT AUTO AWAY AXIS BABY BACK BAIL BAIT BAKE BALD BALE BALL BAND BANE BANG BANK BARE BARK BARN BASE BASH BASK BATH BEAD BEAM BEAN BEAR BEAT BEEF BEEN BEER BELL BELT BEND BENT BEST BIKE BILE BILL BIND BIRD BITE BLOW BLUE BOAR BOAT BODY BOIL BOLD BOLT BOMB BOND BONE BOOK BOOM BOOT BORE BORN BOSS BOTH BOWL BRAG BRAN BRED BREW BROW BUCK BULK BULL BUMP BUNK BURN BURY BUSH BUST BUSY CAGE CAKE CALF CALL CALM CAMP CANE CARD CARE CARP CART CASE CASH CAST CAVE CELL CENT CHAT CHEF CHIN CHIP CHOP CITY CLAD CLAM CLAP CLAW CLAY CLIP CLOG CLUB CLUE COAL COAT CODE COIL COIN COLD COLT COMB COME CONE COOK COOL COPE COPY CORD CORE CORK CORN COST COVE CRAB CREW CROP CROW CUBE CURB CURE CURL CUTE DAILY DAMP DARE DARK DART DASH DATE DAWN DEAD DEAF DEAL DEAN DEAR DEBT DECK DEED DEEP DEER DENT DESK DIAL DICE DIET DIME DINE DING DIRE DIRT DISH DISK DIVE DOCK DOES DOLL DOME DONE DOOM DOOR DOSE DOVE DOWN DRAG DRAW DREW DRIP DROP DRUG DRUM DUAL DUCK DUEL DULL DUMB DUNE DUSK DUST DUTY EACH EARL EARN EASE EAST EASY ECHO EDGE EDIT FACE FACT FADE FAIL FAIR FAKE FALL FAME FARE FARM FAST FATE FEAR FEAT FEED FEEL FEET FELL FELT FERN FILE FILL FILM FIND FINE FIRE FIRM FISH FIST FIVE FLAG FLAT FLED FLEE FLEW FLEX FLIP FLOW FOAM FOIL FOLD FOLK FOND FONT FOOD FOOL FOOT FORD FORE FORK FORM FORT FOUL FOUR FOWL FREE FRET FROG FROM FUEL FULL FUME FUND FURY FUSE GAIN GALA GALE GAME GANG GAPE GASP GATE GAVE GAZE GEAR GENE GERM GIFT GILD GILL GIRL GIVE GLAD GLEE GLOW GLUE GOAL GOAT GOES GOLD GOLF GONE GONG GOOD GOSH GOWN GRAB GRAD GRAM GRAY GREW GRID GRIM GRIN GRIP GROW GULF GULL GUSH GUST HACK HAIL HAIR HALF HALL HALT HAND HANG HARD HARE HARM HARP HASH HATE HAUL HAVE HAWK HAZE HEAD HEAL HEAP HEAR HEAT HEED HEEL HEIR HELD HELL HELP HERB HERD HERE HERO HIDE HIGH HIKE HILL HINT HIRE HISS HIVE HOLD HOLE HOME HOOD HOOF HOOK HOOP HOPE HORN HOSE HOST HOUR HUGE HULL HUNG HUNT HURL HURT HUSH IDEA IDLE INCH INTO IRON ITEM JADE JAIL JAZZ JEAN JEEP JOIN JOKE JOLT JUMP JUNK JURY JUST KEEN KEEP KELP KEPT KICK KILL KILN KIND KING KISS KITE KNEE KNEW KNIT KNOB KNOT KNOW LACE LACK LAID LAIR LAKE LAMB LAMP LAND LANE LARK LASH LAST LATE LAVA LAWN LEAD LEAF LEAK LEAN LEAP LEFT LEND LENS LESS LIAR LICE LICK LIFE LIFT LIKE LIME LIMP LINE LINK LINT LION LIST LIVE LOAD LOAF LOAN LOCK LOFT LONE LONG LOOK LOOM LOOP LORD LORE LOSE LOSS LOST LOUD LOVE LUCK LULL LUMP LUNG LURE LUSH MAIL MAIN MAKE MALE MALL MALT MANE MANY MARE MARK MASH MASK MASS MAST MATE MATH MAZE MEAL MEAN MEAT MELT MEND MENU MERE MESH MICE MILD MILE MILK MILL MIND MINE MINT MISS MIST MOAN MOAT MOCK MODE MOLD MOLE MONK MOOD MOON MOOR MORE MOSS MOST MOTH MOVE MUCH MULE MYTH NAIL NAME NEAR NEAT NECK NEED NEST NEWS NEWT NEXT NICE NINE NODE NONE NOOK NOON NORM NOSE NOTE NOUN OATH OBEY ODDS OKAY ONCE ONLY ONTO OPAL OPEN ORAL OVAL OVEN OVER PACE PACK PACT PAGE PAID PAIL PAIN PAIR PALE PALM PANE PANG PANT PARK PART PASS PAST PATH PAVE PEAK PEAR PEAT PEEL PEEK PEER PELT PERK PEST PICK PIER PILE PILL PINE PINK PINT PIPE PITY PLAN PLAY PLEA PLOD PLOT PLOW PLUG PLUS POEM POET POKE POLE POLL POND PONY POOL POOR PORE PORK PORT POSE POST POUR POUT PRAY PREY PROP PUFF PULL PULP PUMP PUNK PUNT PURE PUSH QUIT QUIZ RACE RACK RAFT RAGE RAID RAIL RAIN RAKE RAMP RANG RANK RANT RARE RASH RATE RAVE READ REAL REAP REAR REED REEF REEL REIN RELY REND RENT REST RICE RICH RIDE RIFT RING RINK RIOT RIPE RISE RISK ROAD ROAM ROAR ROBE ROCK RODE ROLE ROLL ROOF ROOM ROOT ROPE ROSE ROSY ROUT RUBY RUDE RUIN RULE RUNG RUSE RUSH RUST SACK SAFE SAGE SAID SAIL SAKE SALE SALT SAME SAND SANE SANG SASH SAVE SCAN SCAR SEAL SEAM SEAT SEED SEEK SEEM SEEN SELF SELL SEND SENT SHED SHIN SHIP SHOE SHOP SHOT SHOW SHUT SICK SIDE SIFT SIGH SIGN SILK SILL SING SINK SITE SIZE SKID SKIM SKIN SKIP SLAB SLAM SLAP SLED SLID SLIM SLIP SLOT SLOW SLUG SNAP SNIP SNOW SOAK SOAP SOAR SOCK SODA SOFA SOFT SOIL SOLD SOLE SOME SONG SOON SORE SORT SOUL SOUP SOUR SPAN SPAR SPED SPIN SPOT SPRY SPUR STAB STAG STAR STAY STEM STEP STEW STIR STOP STOW STUB STUD STUN SUCH SUIT SUNG SUNK SURE SWAM SWAN SWAP SWAT SWAY SWIM TACK TAIL TAKE TALE TALK TALL TAME TANK TAPE TART TASK TEAL TEAM TEAR TECH TEND TENT TERM TEST TEXT THAN THAT THAW THEM THEN THEY THIN THIS TIDE TIDY TIED TIER TILE TILL TILT TIME TINT TINY TIRE TOAD TOIL TOLD TOLL TOMB TONE TONG TOOK TOOL TOOT TORE TORN TOSS TOUR TOWN TRAM TRAP TRAY TREE TREK TRIM TRIO TRIP TRUE TUBE TUCK TUNA TUNE TURF TURN TWIG TWIN TWIT TYPE UGLY UNDO UNIT UPON URGE USED USER VAIN VALE VAN VARY VAST VEAL VEIL VEIN VENT VERB VERY VEST VETO VIAL VICE VIEW VINE VISA VOID VOLT VOTE WADE WAGE WAIL WAIT WAKE WALK WALL WAND WANE WANT WARD WARE WARM WARN WARP WART WASH WASP WAVE WEAK WEAR WEED WEEK WEEP WELD WELL WENT WEPT WERE WEST WHAT WHEN WHET WHIP WHIR WHIZ WIDE WIFE WILD WILL WILT WIND WINE WING WINK WIPE WIRE WISE WISH WOKE WOLF WOOD WOOL WORD WORE WORK WORM WORN WRAP YARD YARN YAWN YEAR YELL YOGA ZERO ZEST ZINC ZONE".split(/\s+/).filter(w=>w.length===4);
+const DICT=new Set(WL);
+let start='', target='', ladder=[], over=false;
+function neighbors(w){ const out=[]; for(let i=0;i<4;i++)for(let ch=65;ch<=90;ch++){ const n=w.slice(0,i)+String.fromCharCode(ch)+w.slice(i+1); if(n!==w&&DICT.has(n))out.push(n); } return out; }
+function bfs(from,to){ const q=[[from]]; const seen=new Set([from]); let it=0; while(q.length&&it<50000){ const path=q.shift(); it++; const last=path[path.length-1]; if(last===to)return path; for(const n of neighbors(last)){ if(!seen.has(n)){ seen.add(n); q.push(path.concat(n)); } } } return null; }
+function newGame(){ over=false;
+  // pick start and a target 3-5 steps away via BFS layering
+  let tries=0, path=null;
+  while(!path && tries<200){ tries++; start=WL[0|Math.random()*WL.length]; // BFS to get a node ~3-5 steps away
+    const q=[[start]]; const seen=new Set([start]); const cands=[];
+    let it=0; while(q.length&&it<3000){ const p=q.shift(); it++; if(p.length>=4&&p.length<=6)cands.push(p); if(p.length>6)continue; for(const n of neighbors(p[p.length-1])){ if(!seen.has(n)){seen.add(n);q.push(p.concat(n));} } }
+    if(cands.length){ path=cands[0|Math.random()*cands.length]; target=path[path.length-1]; }
+  }
+  if(!path){ start='COLD'; target='WARM'; }
+  ladder=[start];
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('startW').textContent=start; document.getElementById('endW').textContent=target;
+  document.getElementById('inp').value=''; document.getElementById('inp').focus(); setMsg(''); render();
+}
+function setMsg(t,c){ const m=document.getElementById('msg'); m.textContent=t; m.style.color=c||'var(--text)'; }
+function diffOne(a,b){ let d=0; for(let i=0;i<4;i++)if(a[i]!==b[i])d++; return d===1; }
+function tryWord(w){ w=w.toUpperCase(); if(over)return;
+  if(w.length!==4){ setMsg('Need a 4-letter word','var(--red)'); return; }
+  const last=ladder[ladder.length-1];
+  if(!diffOne(last,w)){ setMsg('Change exactly ONE letter','var(--red)'); sfx('error'); return; }
+  if(!DICT.has(w)){ setMsg('"'+w+'" is not in the word list','var(--red)'); sfx('error'); return; }
+  ladder.push(w); sfx('place'); setMsg(''); render(); document.getElementById('inp').value='';
+  if(w===target) win();
+}
+function hint(){ if(over)return; const last=ladder[ladder.length-1]; const path=bfs(last,target); if(path&&path.length>1){ tryWord(path[1]); } else setMsg('No hint available','var(--dim)'); }
+function render(){ const l=document.getElementById('ladder'); l.innerHTML='';
+  ladder.forEach((w,i)=>{ const row=document.createElement('div'); row.className='wl-word'; const prev=i>0?ladder[i-1]:null;
+    for(let k=0;k<4;k++){ const d=document.createElement('div'); d.className='wl-l'+(i===0?' start':'')+(w===target?' end':'')+(prev&&prev[k]!==w[k]?' changed':''); d.textContent=w[k]; row.appendChild(d); }
+    l.appendChild(row);
+  });
+  document.getElementById('steps').textContent=ladder.length-1;
+}
+function win(){ over=true; const r=window.GH?GH.score.best(GAME,'bestSteps',ladder.length-1,'low'):{}; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='Reached '+target+' in '+(ladder.length-1)+' steps!'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+document.getElementById('inp').addEventListener('keydown',e=>{ if(e.key==='Enter'){ tryWord(e.target.value); } });
+newGame();
+</script>
+</body>
+</html>

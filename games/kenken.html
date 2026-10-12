@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KenKen</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<script src="../themes/themes.js" defer></script><link rel="stylesheet" href="../themes/themes.css">
+<script src="../lang/lang.js" defer></script>
+<style>
+.kk-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.kk-board{position:relative;background:var(--surface);border:3px solid #888;border-radius:6px;}
+.kk-cell{position:absolute;box-sizing:border-box;display:flex;align-items:flex-start;justify-content:flex-start;cursor:pointer;}
+.kk-val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:700;color:var(--text);}
+.kk-cage{position:absolute;top:2px;left:3px;font-family:'Orbitron',monospace;font-size:10px;color:var(--accent);font-weight:700;}
+.kk-cell.err .kk-val{color:var(--red);}
+.kk-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">✖️ KENKEN</span>
+  <div class="h-btns"><select id="size-sel" onchange="newGame()"><option value="4" selected>4×4</option><option value="5">5×5</option><option value="6">6×6</option></select><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="kk-wrap">
+  <div class="kk-hint">Fill each row &amp; column with 1–N. Each cage (bold outline) must reach its target using the shown operation. Tap a cell to cycle.</div>
+  <div id="board" class="kk-board"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='kenken';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let N=4, sol=[], grid=[], cages=[], cageOf=[], over=false, CELL=64;
+function newGame(){ N=parseInt(document.getElementById('size-sel').value,10); over=false; CELL=N<=4?70:N<=5?60:52;
+  document.getElementById('win-overlay').classList.remove('show'); gen(); grid=Array.from({length:N},()=>Array(N).fill(0)); render(); }
+function genLatin(){ const base=Array.from({length:N},(_,r)=>Array.from({length:N},(_,c)=>((r+c)%N)+1)); const rp=[...Array(N).keys()]; shuffle(rp); const vp=[...Array(N).keys()].map(x=>x+1); shuffle(vp); const M=Array.from({length:N},()=>Array(N).fill(0)); for(let r=0;r<N;r++)for(let c=0;c<N;c++)M[r][c]=vp[base[rp[r]][c]-1]; return M; }
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function gen(){
+  sol=genLatin();
+  // partition into cages by random growth (size 1-3)
+  cageOf=Array.from({length:N},()=>Array(N).fill(-1)); cages=[];
+  const cells=[]; for(let r=0;r<N;r++)for(let c=0;c<N;c++)cells.push([r,c]); shuffle(cells);
+  for(const [r,c] of cells){ if(cageOf[r][c]>=0)continue; const id=cages.length; const cage={id,cells:[[r,c]]}; cageOf[r][c]=id;
+    const want=1+(0|Math.random()*3);
+    while(cage.cells.length<want){ const opts=[]; for(const [cr,cc] of cage.cells)for(const [dr,dc] of [[0,1],[1,0],[0,-1],[-1,0]]){ const nr=cr+dr,nc=cc+dc; if(nr>=0&&nr<N&&nc>=0&&nc<N&&cageOf[nr][nc]<0)opts.push([nr,nc]); } if(!opts.length)break; const [nr,nc]=opts[0|Math.random()*opts.length]; if(cageOf[nr][nc]<0){ cageOf[nr][nc]=id; cage.cells.push([nr,nc]); } }
+    cages.push(cage);
+  }
+  // assign op + target from solution
+  for(const cage of cages){ const vals=cage.cells.map(([r,c])=>sol[r][c]);
+    if(vals.length===1){ cage.op=''; cage.target=vals[0]; continue; }
+    if(vals.length===2){ const [a,b]=vals; const hi=Math.max(a,b),lo=Math.min(a,b); const choices=[['-',hi-lo],['+',a+b]]; if(hi%lo===0)choices.push(['÷',hi/lo]); choices.push(['×',a*b]); const pick=choices[0|Math.random()*choices.length]; cage.op=pick[0]; cage.target=pick[1]; }
+    else { if(Math.random()<0.5){ cage.op='+'; cage.target=vals.reduce((a,b)=>a+b,0); } else { cage.op='×'; cage.target=vals.reduce((a,b)=>a*b,1); } }
+  }
+}
+function cycle(r,c){ if(over)return; grid[r][c]=(grid[r][c]+1)%(N+1); sfx('select'); render(); if(checkWin())win(); }
+function cageOk(cage){ const vals=cage.cells.map(([r,c])=>grid[r][c]); if(vals.some(v=>v===0))return null; // incomplete
+  if(cage.op==='')return vals[0]===cage.target; if(cage.op==='+')return vals.reduce((a,b)=>a+b,0)===cage.target; if(cage.op==='×')return vals.reduce((a,b)=>a*b,1)===cage.target;
+  if(cage.op==='-'){ const [a,b]=vals; return Math.abs(a-b)===cage.target; } if(cage.op==='÷'){ const hi=Math.max(...vals),lo=Math.min(...vals); return lo>0&&hi%lo===0&&hi/lo===cage.target; } return false; }
+function errors(){ const bad=new Set();
+  for(let r=0;r<N;r++){ const seen={}; for(let c=0;c<N;c++){ const v=grid[r][c]; if(v){ if(seen[v]!==undefined){bad.add(r+','+c);bad.add(r+','+seen[v]);} seen[v]=c; } } }
+  for(let c=0;c<N;c++){ const seen={}; for(let r=0;r<N;r++){ const v=grid[r][c]; if(v){ if(seen[v]!==undefined){bad.add(r+','+c);bad.add(seen[v]+','+c);} seen[v]=r; } } }
+  for(const cage of cages){ const res=cageOk(cage); if(res===false) cage.cells.forEach(([r,c])=>bad.add(r+','+c)); }
+  return bad;
+}
+function checkWin(){ for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(grid[r][c]===0)return false; return errors().size===0; }
+function render(){ const b=document.getElementById('board'); if(!b)return; b.style.width=N*CELL+'px'; b.style.height=N*CELL+'px'; b.innerHTML='';
+  const bad=errors();
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const d=document.createElement('div'); d.className='kk-cell'+(bad.has(r+','+c)?' err':''); d.style.left=c*CELL+'px'; d.style.top=r*CELL+'px'; d.style.width=CELL+'px'; d.style.height=CELL+'px';
+    const id=cageOf[r][c];
+    // thick borders between different cages
+    const thick='3px solid #888', thin='1px solid #333';
+    d.style.borderTop = (r===0||cageOf[r-1][c]!==id)?thick:thin;
+    d.style.borderLeft = (c===0||cageOf[r][c-1]!==id)?thick:thin;
+    d.style.borderRight = (c===N-1||cageOf[r][c+1]!==id)?thick:thin;
+    d.style.borderBottom = (r===N-1||cageOf[r+1][c]!==id)?thick:thin;
+    // cage label on top-left cell of cage
+    const cage=cages[id]; const isHead = cage.cells[0][0]===r&&cage.cells[0][1]===c;
+    let inner=''; if(isHead) inner+='<div class="kk-cage">'+cage.target+(cage.op||'')+'</div>';
+    inner+='<div class="kk-val" style="font-size:'+(CELL*0.42)+'px">'+(grid[r][c]||'')+'</div>';
+    d.innerHTML=inner; d.onclick=()=>cycle(r,c); b.appendChild(d);
+  }
+}
+function win(){ over=true; if(window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-sub').textContent='All cages solved! 🎉'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+newGame();
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ultimate Tic-Tac-Toe</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ut-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px;}
+.ut-status{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;min-height:22px;letter-spacing:1px;}
+.ut-big{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;background:#3a3a4a;padding:7px;border-radius:12px;}
+.ut-small{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--surface);border-radius:8px;padding:4px;position:relative;transition:box-shadow .2s;}
+.ut-small.active{box-shadow:0 0 0 3px var(--accent);}
+.ut-small.won{opacity:.96;}
+.ut-cell{aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;cursor:pointer;background:var(--surface2);border-radius:4px;transition:background .12s;}
+.ut-cell.playable:hover{background:var(--surface3);}
+.ut-cell.x{color:#f0c040;} .ut-cell.o{color:#5090e0;}
+.ut-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;border-radius:8px;pointer-events:none;}
+.ut-overlay.x{color:#f0c040;background:rgba(240,192,64,.14);} .ut-overlay.o{color:#5090e0;background:rgba(80,144,224,.14);} .ut-overlay.d{color:var(--dim);background:rgba(120,120,120,.12);}
+.ut-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:440px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#34d399">#️⃣ ULTIMATE T-T-T</span>
+  <div class="h-btns">
+    <select id="mode-sel" onchange="newGame()">
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai" selected>VS AI</option>
+    </select>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ut-wrap">
+  <div class="ut-status" id="status">Your turn (X)</div>
+  <div class="ut-hint">Your move's <b>cell</b> sends your opponent to the matching <b>board</b>. Win 3 boards in a row to win!</div>
+  <div class="ut-big" id="big"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='ultimatettt';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+let board=[], bigWin=[], forced=-1, turn=1, mode='ai', over=false, busy=false;
+function newGame(){
+  mode=document.getElementById('mode-sel').value;
+  board=Array.from({length:9},()=>Array(9).fill(0)); bigWin=Array(9).fill(0); forced=-1; turn=1; over=false; busy=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  render(); setStatus();
+}
+function winnerOf(cells){ for(const [a,b,c] of LINES) if(cells[a]&&cells[a]===cells[b]&&cells[a]===cells[c]) return cells[a]; if(cells.every(v=>v)) return 3; return 0; }
+function playableBoard(bi){ return bigWin[bi]===0 && (forced===-1||forced===bi) && board[bi].some(v=>v===0); }
+function click(bi,ci){
+  if(over||busy) return;
+  if(mode==='ai'&&turn===2) return;
+  move(bi,ci,turn);
+}
+function move(bi,ci,p){
+  if(bigWin[bi]!==0 || board[bi][ci]!==0) return;
+  if(forced!==-1 && forced!==bi) return;
+  board[bi][ci]=p; sfx('place');
+  const w=winnerOf(board[bi]); if(w)bigWin[bi]=w;
+  forced = (bigWin[ci]!==0 || board[ci].every(v=>v)) ? -1 : ci;
+  const gw=winnerOf(bigWin.map(v=>v===3?0:v));
+  render();
+  if(gw){ return win(gw); }
+  if(bigWin.every(v=>v!==0)){ return win(0); }
+  turn=p===1?2:1; setStatus();
+  if(mode==='ai'&&turn===2&&!over){ busy=true; setTimeout(aiMove,500); }
+}
+function legalMoves(){ const mv=[]; for(let bi=0;bi<9;bi++){ if(!playableBoard(bi))continue; for(let ci=0;ci<9;ci++) if(board[bi][ci]===0) mv.push([bi,ci]); } return mv; }
+function aiMove(){
+  if(over)return;
+  const mv=legalMoves(); if(!mv.length){ busy=false; return; }
+  const me=2, opp=1;
+  function scoreMove([bi,ci]){
+    let s=Math.random()*0.5;
+    // win a small board
+    const test=board[bi].slice(); test[ci]=me; if(winnerOf(test)===me) s+=10;
+    // block opp small win
+    const t2=board[bi].slice(); t2[ci]=opp; if(winnerOf(t2)===opp) s+=6;
+    // center board / center cell bonus
+    if(ci===4)s+=0.6; if(bi===4)s+=0.4;
+    // avoid sending opp to a board where they can immediately win that board
+    const dest=ci; if(bigWin[dest]===0){ for(let k=0;k<9;k++){ if(board[dest][k]===0){ const tt=board[dest].slice(); tt[k]=opp; if(winnerOf(tt)===opp){ s-=3; break; } } } }
+    // winning a board that completes a big line
+    if(winnerOf(test)===me){ const bw=bigWin.slice(); bw[bi]=me; if(winnerOf(bw.map(v=>v===3?0:v))===me) s+=50; }
+    return s;
+  }
+  let best=mv[0],bs=-1e9; for(const m of mv){ const s=scoreMove(m); if(s>bs){bs=s;best=m;} }
+  busy=false;
+  move(best[0],best[1],2);
+}
+function render(){
+  const big=document.getElementById('big'); big.innerHTML='';
+  for(let bi=0;bi<9;bi++){
+    const sm=document.createElement('div'); sm.className='ut-small'+(playableBoard(bi)&&!over?' active':'')+(bigWin[bi]?' won':'');
+    for(let ci=0;ci<9;ci++){ const cell=document.createElement('div'); const v=board[bi][ci];
+      const canPlay=!over&&playableBoard(bi)&&v===0&&!(mode==='ai'&&turn===2);
+      cell.className='ut-cell'+(v===1?' x':v===2?' o':'')+(canPlay?' playable':'');
+      cell.textContent=v===1?'✕':v===2?'◯':'';
+      if(canPlay) cell.onclick=()=>click(bi,ci);
+      sm.appendChild(cell);
+    }
+    if(bigWin[bi]){ const ov=document.createElement('div'); ov.className='ut-overlay '+(bigWin[bi]===1?'x':bigWin[bi]===2?'o':'d'); ov.textContent=bigWin[bi]===1?'✕':bigWin[bi]===2?'◯':'–'; ov.style.fontSize='48px'; sm.appendChild(ov); }
+    big.appendChild(sm);
+  }
+}
+function setStatus(){ if(over)return; const el=document.getElementById('status'); el.textContent=(mode==='ai'&&turn===2)?'🤖 AI thinking…':(turn===1?'Your turn (✕)':'Player 2 (◯)'); el.style.color=turn===1?'#f0c040':'#5090e0'; }
+function win(w){ over=true; const youWin=w===1; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=w===0?'🤝 DRAW!':(youWin?'🏆 YOU WIN!':(mode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!'));
+  document.getElementById('win-sub').textContent=w===0?'All boards filled.':'Three boards in a row!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+newGame();
+</script>
+</body>
+</html>

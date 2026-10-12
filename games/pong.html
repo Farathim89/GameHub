@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pong</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.pg-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 10px;}
+#pong{background:#0a0a0a;border:2px solid var(--border);border-radius:12px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.pg-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🏓 PONG</span>
+  <div class="h-btns">
+    <select id="diff-sel" onchange="newGame()">
+      <option value="4">EASY</option>
+      <option value="6" selected>NORMAL</option>
+      <option value="9">HARD</option>
+    </select>
+    <select id="target-sel" onchange="newGame()">
+      <option value="7" selected>First to 7</option>
+      <option value="11">First to 11</option>
+    </select>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+
+<div class="pg-wrap">
+  <div class="pg-hint">Move your paddle: <b>mouse / touch / ↑ ↓ / W S</b>. Don't let the ball past you!</div>
+  <canvas id="pong" width="720" height="440"></canvas>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+const cv=document.getElementById('pong'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, PW=12, PH=86, R=9;
+let py, ay, px=18, ax=W-18-PW, ball, sP, sA, target, aiSpeed, running, raf, up=false, down=false;
+
+function newGame(){
+  aiSpeed=parseInt(document.getElementById('diff-sel').value,10);
+  target=parseInt(document.getElementById('target-sel').value,10);
+  document.getElementById('win-overlay').classList.remove('show');
+  py=ay=(H-PH)/2; sP=0; sA=0;
+  resetBall(Math.random()<0.5?1:-1);
+  running=true;
+  cancelAnimationFrame(raf);
+  loop();
+}
+
+function resetBall(dir){
+  const ang=(Math.random()*0.6-0.3);
+  const sp=6;
+  ball={x:W/2,y:H/2,vx:dir*sp*Math.cos(ang),vy:sp*Math.sin(ang)};
+}
+
+function loop(){
+  if(!running) return;
+  update();
+  draw();
+  raf=requestAnimationFrame(loop);
+}
+
+function update(){
+  // player keyboard
+  if(up) py-=7; if(down) py+=7;
+  py=Math.max(0,Math.min(H-PH,py));
+
+  // AI follows ball with capped speed + small deadzone
+  const target_y=ball.y-PH/2;
+  if(ay+PH/2 < ball.y-8) ay+=aiSpeed;
+  else if(ay+PH/2 > ball.y+8) ay-=aiSpeed;
+  ay=Math.max(0,Math.min(H-PH,ay));
+
+  ball.x+=ball.vx; ball.y+=ball.vy;
+  // top/bottom
+  if(ball.y<R){ball.y=R;ball.vy*=-1;}
+  if(ball.y>H-R){ball.y=H-R;ball.vy*=-1;}
+
+  // player paddle collision
+  if(ball.vx<0 && ball.x-R<px+PW && ball.x-R>px-6 && ball.y>py && ball.y<py+PH){
+    ball.x=px+PW+R; bounce(py);
+  }
+  // ai paddle collision
+  if(ball.vx>0 && ball.x+R>ax && ball.x+R<ax+PW+6 && ball.y>ay && ball.y<ay+PH){
+    ball.x=ax-R; bounce(ay);
+  }
+
+  // scoring
+  if(ball.x<-R){ sA++; afterPoint(-1); }
+  else if(ball.x>W+R){ sP++; afterPoint(1); }
+}
+
+function bounce(paddleY){
+  const rel=(ball.y-(paddleY+PH/2))/(PH/2); // -1..1
+  const speed=Math.min(13, Math.hypot(ball.vx,ball.vy)*1.06);
+  const ang=rel*0.9;
+  const dir=ball.vx<0?1:-1;
+  ball.vx=dir*speed*Math.cos(ang);
+  ball.vy=speed*Math.sin(ang);
+}
+
+function afterPoint(dir){
+  if(sP>=target||sA>=target){ running=false; endGame(); return; }
+  resetBall(dir);
+  ball.x=W/2; ball.y=H/2;
+}
+
+function endGame(){
+  const youWin=sP>target-1 && sP>sA;
+  document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 AI WINS!';
+  document.getElementById('win-sub').textContent='Final: '+sP+' — '+sA;
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // net
+  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=3; ctx.setLineDash([12,14]);
+  ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
+  // scores
+  ctx.fillStyle='rgba(240,192,64,.85)'; ctx.font='bold 46px Orbitron,monospace'; ctx.textAlign='center';
+  ctx.fillText(sP, W/2-70, 56); ctx.fillText(sA, W/2+70, 56);
+  // paddles
+  ctx.fillStyle='#40c0a0'; roundRect(px,py,PW,PH); ctx.fill();
+  ctx.fillStyle='#e05050'; roundRect(ax,ay,PW,PH); ctx.fill();
+  // ball
+  ctx.fillStyle='#f0f0f0'; ctx.beginPath(); ctx.arc(ball.x,ball.y,R,0,7); ctx.fill();
+}
+function roundRect(x,y,w,h){const r=5;ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+function movePaddleTo(clientY){
+  const rect=cv.getBoundingClientRect();
+  const scale=H/rect.height;
+  py=(clientY-rect.top)*scale-PH/2;
+  py=Math.max(0,Math.min(H-PH,py));
+}
+cv.addEventListener('mousemove',e=>movePaddleTo(e.clientY));
+cv.addEventListener('touchmove',e=>{e.preventDefault();movePaddleTo(e.touches[0].clientY);},{passive:false});
+cv.addEventListener('touchstart',e=>{e.preventDefault();movePaddleTo(e.touches[0].clientY);},{passive:false});
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'||e.key==='w'){up=true;e.preventDefault();}
+  if(e.key==='ArrowDown'||e.key==='s'){down=true;e.preventDefault();}
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='ArrowUp'||e.key==='w')up=false;
+  if(e.key==='ArrowDown'||e.key==='s')down=false;
+});
+newGame();
+</script>
+</body>
+</html>

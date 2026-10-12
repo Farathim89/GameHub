@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tron</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.tr-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#tron{background:#060a12;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.tr-dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:6px;}
+.tr-dpad button{font-size:20px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.tr-dpad button:active{background:rgba(80,144,224,.25);}
+.tr-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🏍️ TRON</span>
+  <div class="h-btns">
+    <select id="speed-sel" onchange="newGame()">
+      <option value="60">SLOW</option>
+      <option value="45" selected>NORMAL</option>
+      <option value="30">FAST</option>
+    </select>
+    <div class="info-pill">WINS: <span id="wins">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="tr-wrap">
+  <div class="tr-hint">Arrow keys / WASD / pad to steer. Don't hit the walls or the light trails!</div>
+  <canvas id="tron" width="500" height="400"></canvas>
+  <div class="tr-dpad">
+    <span></span><button onpointerdown="pd(event,0,-1)">▲</button><span></span>
+    <button onpointerdown="pd(event,-1,0)">◀</button><span></span><button onpointerdown="pd(event,1,0)">▶</button>
+    <span></span><button onpointerdown="pd(event,0,1)">▼</button><span></span>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='tron';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('tron'), ctx=cv.getContext('2d');
+const CELL=10, COLS=cv.width/CELL, ROWS=cv.height/CELL;
+let grid, p1, p2, running, tickMs, lastTick, raf, over;
+
+function newGame(){
+  tickMs=parseInt(document.getElementById('speed-sel').value,10);
+  grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  p1={x:(COLS*0.25)|0,y:(ROWS/2)|0,dx:1,dy:0,alive:true,ndx:1,ndy:0};
+  p2={x:(COLS*0.75)|0,y:(ROWS/2)|0,dx:-1,dy:0,alive:true};
+  grid[p1.y][p1.x]=1; grid[p2.y][p2.x]=2;
+  over=false; running=true;
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  lastTick=0; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+  draw();
+}
+function free(x,y){ return x>=0&&x<COLS&&y>=0&&y<ROWS&&grid[y][x]===0; }
+function aiThink(){
+  // keep going if free; else turn to the direction with most open space
+  const opts=[[p2.dx,p2.dy],[-p2.dy,p2.dx],[p2.dy,-p2.dx]]; // straight, turns (no reverse)
+  let best=null,bestScore=-1;
+  for(const [dx,dy] of opts){
+    const nx=p2.x+dx, ny=p2.y+dy;
+    if(!free(nx,ny)) continue;
+    // flood-ish lookahead: count open cells in a small radius
+    let space=0;
+    for(let s=1;s<=6;s++){ if(free(p2.x+dx*s,p2.y+dy*s))space++; else break; }
+    const jitter=Math.random()*0.5;
+    if(space+jitter>bestScore){ bestScore=space+jitter; best=[dx,dy]; }
+  }
+  if(best){ p2.dx=best[0]; p2.dy=best[1]; }
+}
+function loop(t){
+  if(!running) return;
+  if(t-lastTick>=tickMs){
+    lastTick=t; step();
+  }
+  raf=requestAnimationFrame(loop);
+}
+function step(){
+  // apply queued player dir
+  p1.dx=p1.ndx; p1.dy=p1.ndy;
+  aiThink();
+  const n1={x:p1.x+p1.dx,y:p1.y+p1.dy};
+  const n2={x:p2.x+p2.dx,y:p2.y+p2.dy};
+  const c1=!free(n1.x,n1.y);
+  const c2=!free(n2.x,n2.y) || (n2.x===n1.x&&n2.y===n1.y);
+  if(c1) p1.alive=false;
+  if(c2) p2.alive=false;
+  if(!p1.alive||!p2.alive){ return finish(); }
+  p1.x=n1.x; p1.y=n1.y; grid[p1.y][p1.x]=1;
+  p2.x=n2.x; p2.y=n2.y; grid[p2.y][p2.x]=2;
+  draw();
+}
+function finish(){
+  running=false; sfx(p1.alive?'win':'lose');
+  draw();
+  let msg,sub;
+  if(p1.alive&&!p2.alive){ msg='🏆 YOU WIN!'; sub='The AI crashed!'; if(window.GH)GH.score.inc(GAME,'wins',1); }
+  else if(!p1.alive&&p2.alive){ msg='💥 YOU CRASHED'; sub='The AI survived.'; }
+  else { msg='🤝 DOUBLE CRASH'; sub='You both went out!'; }
+  document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0;
+  document.getElementById('win-msg').textContent=msg;
+  document.getElementById('win-sub').textContent=sub;
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400);
+}
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    if(grid[y][x]===1){ ctx.fillStyle='rgba(80,144,224,.85)'; ctx.fillRect(x*CELL,y*CELL,CELL-1,CELL-1); }
+    else if(grid[y][x]===2){ ctx.fillStyle='rgba(224,80,80,.85)'; ctx.fillRect(x*CELL,y*CELL,CELL-1,CELL-1); }
+  }
+  // heads
+  ctx.fillStyle='#aad0ff'; ctx.fillRect(p1.x*CELL,p1.y*CELL,CELL-1,CELL-1);
+  ctx.fillStyle='#ffb0b0'; ctx.fillRect(p2.x*CELL,p2.y*CELL,CELL-1,CELL-1);
+}
+function setDir(dx,dy){
+  if(over||!p1.alive) return;
+  if(dx===-p1.dx&&dy===-p1.dy) return; // no reverse
+  p1.ndx=dx; p1.ndy=dy;
+}
+function pd(e,dx,dy){ e.preventDefault(); setDir(dx,dy); }
+document.addEventListener('keydown',e=>{
+  const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+  if(m[e.key]){ e.preventDefault(); setDir(m[e.key][0],m[e.key][1]); }
+});
+newGame();
+</script>
+</body>
+</html>

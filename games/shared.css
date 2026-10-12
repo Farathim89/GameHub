@@ -1,0 +1,114 @@
+/* shared.css — base styles for all game pages */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  color-scheme:dark; /* prevent Chrome forced-dark inversion */
+  --bg:#080808;--surface:#111;--surface2:#1a1a1a;--surface3:#262626;
+  --accent:#f0c040;--red:#e05050;--green:#40c0a0;--blue:#5090e0;--purple:#c080e0;
+  --text:#f0f0f0;--dim:#666;--border:#2a2a2a;
+}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;overflow-x:hidden;}
+/* HEADER */
+.hdr{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--surface);border-bottom:2px solid var(--border);flex-wrap:wrap;position:sticky;top:0;z-index:100;}
+.back-btn{font-family:'Orbitron',monospace;font-size:12px;background:var(--surface2);border:2px solid var(--border);color:var(--text);padding:7px 14px;border-radius:6px;cursor:pointer;transition:all .2s;letter-spacing:1px;text-decoration:none;display:inline-block;}
+.back-btn:hover{border-color:var(--accent);color:var(--accent);}
+.h-title{font-family:'Orbitron',monospace;font-size:clamp(14px,3vw,20px);font-weight:700;letter-spacing:3px;}
+.h-btns{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;align-items:center;}
+.hbtn{font-family:'Share Tech Mono',monospace;font-size:13px;background:var(--surface2);border:2px solid var(--border);color:var(--text);padding:7px 13px;border-radius:6px;cursor:pointer;transition:all .2s;}
+.hbtn:hover{border-color:var(--accent);color:var(--accent);}
+.info-pill{font-family:'Orbitron',monospace;font-size:12px;padding:5px 12px;border-radius:6px;background:var(--surface2);border:2px solid var(--border);white-space:nowrap;}
+.info-pill span{color:var(--accent);}
+/* MODE PICK */
+.mode-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;gap:28px;padding:30px;}
+.mode-title{font-family:'Orbitron',monospace;font-size:clamp(22px,5vw,40px);font-weight:900;letter-spacing:4px;text-align:center;}
+.mode-btns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
+.mbtn{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;padding:16px 30px;border-radius:10px;border:3px solid;cursor:pointer;transition:all .25s;letter-spacing:2px;background:var(--surface);}
+.mbtn:hover{transform:scale(1.05);}
+.mbtn.blue{color:var(--blue);border-color:var(--blue);}  .mbtn.blue:hover{background:rgba(80,144,224,.15);}
+.mbtn.green{color:var(--green);border-color:var(--green);}.mbtn.green:hover{background:rgba(64,192,160,.15);}
+.mbtn.red{color:var(--red);border-color:var(--red);}    .mbtn.red:hover{background:rgba(224,80,80,.15);}
+.mbtn.accent{color:var(--accent);border-color:var(--accent);}.mbtn.accent:hover{background:rgba(240,192,64,.15);}
+/* WIN OVERLAY */
+#win-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:20px;}
+#win-overlay.show{display:flex;}
+.win-msg{font-family:'Orbitron',monospace;font-size:clamp(26px,6vw,56px);font-weight:900;color:var(--accent);text-shadow:0 0 40px rgba(240,192,64,.5);animation:pulse 1s infinite;text-align:center;padding:0 20px;}
+.win-sub{font-family:'Orbitron',monospace;font-size:16px;color:var(--text);letter-spacing:2px;text-align:center;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.85;transform:scale(1.03)}}
+.win-btns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+.win-btn{background:var(--accent);border:none;color:#000;font-family:'Orbitron',monospace;font-size:15px;font-weight:700;padding:13px 28px;border-radius:8px;cursor:pointer;letter-spacing:2px;transition:transform .2s;}
+.win-btn:hover{transform:scale(1.05);}
+.win-btn.sec{background:var(--surface2);color:var(--text);border:2px solid var(--border);}
+/* TURN BAR */
+.turn-bar{display:flex;align-items:center;justify-content:center;gap:14px;padding:10px;flex-wrap:wrap;}
+.turn-ind{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;padding:8px 20px;border-radius:8px;border:2px solid;letter-spacing:2px;transition:all .3s;}
+/* PLAYING CARDS - improved */
+.card{
+  display:inline-flex;flex-direction:column;
+  border-radius:9px;border:1px solid rgba(0,0,0,.28);
+  background:linear-gradient(158deg,#fdfcf7 0%,#f3eddf 55%,#eae2d0 100%);
+  box-shadow:0 2px 7px rgba(0,0,0,.5),
+             inset 0 0 0 2px rgba(255,255,255,.72),
+             inset 0 0 0 3px rgba(0,0,0,.05);
+  position:relative;overflow:hidden;
+  user-select:none;
+  font-family:'Orbitron',monospace;font-weight:900;
+}
+.card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.28) 0%,transparent 42%);pointer-events:none;border-radius:8px;}
+.card .ctop{display:flex;flex-direction:column;padding:4px 5px;z-index:1;}
+.card .crank{font-size:inherit;line-height:1;letter-spacing:-1px;}
+.card .csuit{font-size:0.75em;line-height:1;}
+.card .cbott{position:absolute;bottom:3px;right:4px;display:flex;flex-direction:column;align-items:flex-end;transform:rotate(180deg);z-index:1;}
+.card .cmid{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.75em;line-height:1;opacity:.92;text-shadow:0 1px 1px rgba(0,0,0,.12);}
+.card.red{background:linear-gradient(158deg,#fdfcf7 0%,#f3eddf 55%,#eae2d0 100%);}
+.card.red .crank,.card.red .csuit,.card.red .cmid{color:var(--card-red-ink,#c8142a);}
+.card.black .crank,.card.black .csuit,.card.black .cmid{color:var(--card-black-ink,#17171a);}
+.card.back{
+  background:
+    repeating-linear-gradient(45deg, var(--card-back-a,#1a3a6a) 0 7px, var(--card-back-b,#0d2040) 7px 14px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.06) 0 7px, transparent 7px 14px);
+  border:2px solid var(--card-back-border,#2a5aaa);
+  box-shadow:0 2px 7px rgba(0,0,0,.5), inset 0 0 0 3px rgba(255,255,255,.14), inset 0 0 0 5px var(--card-back-a,#1a3a6a);
+}
+.card.back::after{content:'';display:block;position:absolute;inset:5px;border:1.5px solid rgba(255,255,255,.22);border-radius:6px;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.14),transparent 62%);}
+.card.selected{box-shadow:0 0 0 3px var(--accent),2px 3px 12px rgba(0,0,0,.6);transform:translateY(-8px);}
+.card.possible-move{box-shadow:0 0 0 3px var(--green);}
+/* SELECT DROPDOWN */
+select{font-family:'Share Tech Mono',monospace;font-size:13px;background:var(--surface2);border:2px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;cursor:pointer;outline:none;}
+select:hover,select:focus{border-color:var(--accent);}
+
+/* ============ JUICE: motion & feedback (shared) ============ */
+/* snappy press feedback on common buttons */
+.hbtn,.mbtn,.win-btn,.back-btn{transition:transform .09s ease,box-shadow .15s ease,background .2s,border-color .2s,color .2s;}
+.hbtn:active,.mbtn:active,.win-btn:active,.back-btn:active,button:active{transform:translateY(1px) scale(.95);}
+.hbtn:hover{transform:translateY(-1px);}
+.win-btn:hover{transform:scale(1.06);box-shadow:0 6px 20px rgba(0,0,0,.4);}
+/* brief flash applied by themes.js on any button click */
+.gh-press{animation:ghPress .18s ease;}
+@keyframes ghPress{0%{transform:scale(1)}40%{transform:scale(.93)}100%{transform:scale(1)}}
+
+/* win overlay: fade the backdrop, pop the message & buttons in */
+#win-overlay.show{animation:ghOvFade .28s ease-out;}
+@keyframes ghOvFade{from{opacity:0}to{opacity:1}}
+#win-overlay.show .win-msg{animation:ghWinPop .5s cubic-bezier(.2,1.3,.4,1), pulse 1s .5s infinite;}
+#win-overlay.show .win-sub{animation:ghRise .5s .08s both ease-out;}
+#win-overlay.show .win-btns{animation:ghRise .5s .16s both ease-out;}
+@keyframes ghWinPop{0%{opacity:0;transform:scale(.4) rotate(-6deg)}60%{transform:scale(1.12) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes ghRise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+/* confetti canvas injected by themes.js */
+#gh-confetti{position:fixed;inset:0;pointer-events:none;z-index:10000;}
+
+/* cards settle in with a gentle lift+shadow transition */
+.card{transition:transform .13s ease, box-shadow .13s ease;}
+
+/* shared deal / flip animations — a game adds .gh-deal (staggered) on its
+   initial deal and .gh-flip when a hidden card turns face-up */
+@keyframes ghCardDeal{from{opacity:0;transform:translateY(-34px) scale(.82) rotate(-5deg);}to{opacity:1;transform:translateY(0) scale(1) rotate(0);}}
+@keyframes ghCardFlip{0%{transform:rotateY(85deg) scale(.92);opacity:.2;}55%{opacity:1;}100%{transform:rotateY(0) scale(1);opacity:1;}}
+.card.gh-deal{animation:ghCardDeal .34s cubic-bezier(.2,1,.35,1) both;}
+.card.gh-flip{animation:ghCardFlip .32s ease-out both;}
+
+@media (prefers-reduced-motion: reduce){
+  .hbtn,.mbtn,.win-btn,.back-btn,.card{transition:none!important;}
+  .gh-press,#win-overlay.show,#win-overlay.show .win-msg,#win-overlay.show .win-sub,#win-overlay.show .win-btns,.card.gh-deal,.card.gh-flip{animation:none!important;}
+}

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Threes</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.th-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.th-top{display:flex;gap:12px;align-items:center;}
+.th-next{font-family:'Orbitron',monospace;font-size:12px;color:var(--dim);display:flex;align-items:center;gap:8px;}
+.th-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:var(--surface);padding:10px;border-radius:14px;border:2px solid var(--border);touch-action:none;}
+.th-tile{width:72px;height:72px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:26px;transition:transform .1s;}
+.th-tile.e{background:var(--surface2);}
+.th-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;}
+@media(max-width:420px){.th-tile{width:62px;height:62px;font-size:22px;}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">3️⃣ THREES</span>
+  <div class="h-btns"><div class="info-pill">SCORE: <span id="score">0</span></div><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="th-wrap">
+  <div class="th-top"><div class="th-next">NEXT: <span id="next" class="th-tile" style="width:40px;height:40px;font-size:18px"></span></div></div>
+  <div class="th-hint">Combine <b style="color:#5090e0">1</b>+<b style="color:#e05050">2</b>=3, then match equal tiles (3+3=6…). Swipe / arrows to slide.</div>
+  <div id="grid" class="th-grid"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='threes';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let grid=[], score=0, best=0, nextV=0, over=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+function color(v){ if(v===1)return['#5090e0','#fff']; if(v===2)return['#e05050','#fff']; const i=Math.log2(v/3); const hues=['#f0c040','#f0a040','#40c0a0','#c080e0','#f090c0','#50d0d0','#a0e050','#ff8040','#e0e0e0']; return[hues[Math.min(i,hues.length-1)],'#111']; }
+function tileScore(v){ if(v<3)return 0; return Math.pow(3,Math.log2(v/3)+1); }
+function newGame(){ grid=Array.from({length:4},()=>Array(4).fill(0)); score=0; over=false;
+  const cells=[]; for(let r=0;r<4;r++)for(let c=0;c<4;c++)cells.push([r,c]); shuffle(cells);
+  for(let i=0;i<9;i++){ const [r,c]=cells[i]; grid[r][c]=[1,2,3][0|Math.random()*3]; }
+  nextV=genNext();
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; render();
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function genNext(){ const r=Math.random(); return r<0.34?1:r<0.68?2:3; }
+function canMerge(a,b){ if(a===0||b===0)return true; if((a===1&&b===2)||(a===2&&b===1))return true; return a>=3&&a===b; }
+function mergeVal(a,b){ if(a===0)return b; if(b===0)return a; return a+b; }
+function slide(dir){
+  if(over)return;
+  // dir: 0 up,1 right,2 down,3 left. Threes: each tile moves ONE step if it can merge or move into empty
+  const moved=[false];
+  function shiftLine(getter,setter,len,rev){
+    // process from the direction of movement; tiles move toward index 0 (we orient lines so movement is toward 0)
+    for(let i=1;i<len;i++){
+      const cur=getter(i), prev=getter(i-1);
+      if(cur===0)continue;
+      if(prev===0){ setter(i-1,cur); setter(i,0); moved[0]=true; break; }
+      else if(canMerge(prev,cur)&&prev!==0){ setter(i-1,mergeVal(prev,cur)); setter(i,0); score+=tileScore(mergeVal(prev,cur)); moved[0]=true; break; }
+      else break; // blocked; in Threes only the first movable tile per line shifts one
+    }
+  }
+  // Build per-line accessors oriented so "toward 0" = movement direction
+  for(let k=0;k<4;k++){
+    let get,set;
+    if(dir===3){ get=i=>grid[k][i]; set=(i,v)=>grid[k][i]=v; }        // left: toward col 0
+    else if(dir===1){ get=i=>grid[k][3-i]; set=(i,v)=>grid[k][3-i]=v; } // right
+    else if(dir===0){ get=i=>grid[i][k]; set=(i,v)=>grid[i][k]=v; }   // up
+    else { get=i=>grid[3-i][k]; set=(i,v)=>grid[3-i][k]=v; }          // down
+    shiftLine(get,set,4);
+  }
+  if(moved[0]){ spawnNext(dir); sfx('move'); render(); if(!anyMove()) gameOver(); }
+}
+function spawnNext(dir){
+  // spawn on the trailing edge (opposite to movement)
+  const edge=[];
+  if(dir===3){ for(let r=0;r<4;r++) if(grid[r][3]===0) edge.push([r,3]); }
+  else if(dir===1){ for(let r=0;r<4;r++) if(grid[r][0]===0) edge.push([r,0]); }
+  else if(dir===0){ for(let c=0;c<4;c++) if(grid[3][c]===0) edge.push([3,c]); }
+  else { for(let c=0;c<4;c++) if(grid[0][c]===0) edge.push([0,c]); }
+  if(edge.length){ const [r,c]=edge[0|Math.random()*edge.length]; grid[r][c]=nextV; nextV=genNext(); }
+}
+function anyMove(){ for(let r=0;r<4;r++)for(let c=0;c<4;c++){ if(grid[r][c]===0)return true; if(c<3&&canMerge(grid[r][c],grid[r][c+1])&&grid[r][c]!==0&&grid[r][c+1]!==0)return true; if(r<3&&canMerge(grid[r][c],grid[r+1][c])&&grid[r][c]!==0&&grid[r+1][c]!==0)return true; } return false; }
+function render(){
+  const g=document.getElementById('grid'); g.innerHTML='';
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){ const v=grid[r][c]; const d=document.createElement('div');
+    if(v===0){ d.className='th-tile e'; } else { d.className='th-tile'; const [bg,fg]=color(v); d.style.background=bg; d.style.color=fg; d.textContent=v; }
+    g.appendChild(d);
+  }
+  const nx=document.getElementById('next'); const [bg,fg]=color(nextV); nx.style.background=bg; nx.style.color=fg; nx.textContent=nextV>=6?'+':nextV;
+  const total=grid.flat().reduce((s,v)=>s+tileScore(v),0); document.getElementById('score').textContent=total; score=total;
+}
+function gameOver(){ over=true; const total=grid.flat().reduce((s,v)=>s+tileScore(v),0); const r=window.GH?GH.score.best(GAME,'best',total,'high'):{value:total,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  const max=Math.max(...grid.flat()); document.getElementById('win-sub').textContent='Score '+total+' · highest tile '+max+(r.isBest&&total>0?' — NEW BEST! 🎉':''); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+document.addEventListener('keydown',e=>{ const m={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,w:0,d:1,s:2,a:3}; if(m[e.key]!==undefined){e.preventDefault();slide(m[e.key]);} });
+let tsx=0,tsy=0; const gd=document.getElementById('grid');
+gd.addEventListener('touchstart',e=>{tsx=e.touches[0].clientX;tsy=e.touches[0].clientY;},{passive:true});
+gd.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tsx,dy=e.changedTouches[0].clientY-tsy; if(Math.max(Math.abs(dx),Math.abs(dy))<20)return; if(Math.abs(dx)>Math.abs(dy))slide(dx>0?1:3);else slide(dy>0?2:0);},{passive:true});
+newGame();
+</script>
+</body>
+</html>

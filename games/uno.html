@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UNO</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.uno-wrap{padding:12px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;}
+.uno-card{
+  display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+  border-radius:10px;border:3px solid rgba(255,255,255,.3);
+  cursor:pointer;transition:transform .15s,box-shadow .15s;
+  user-select:none;position:relative;overflow:hidden;
+  width:64px;height:90px;flex-shrink:0;
+}
+.uno-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.2) 0%,transparent 50%);pointer-events:none;border-radius:8px;}
+.uno-card .urank{font-family:'Orbitron',monospace;font-weight:900;font-size:22px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6);line-height:1;z-index:1;}
+.uno-card .usym{font-size:11px;color:rgba(255,255,255,.7);font-family:'Orbitron',monospace;z-index:1;}
+.uno-card.selected{transform:translateY(-12px)!important;box-shadow:0 0 0 3px var(--accent),0 12px 28px rgba(0,0,0,.7);}
+.uno-card.disabled{opacity:.35;cursor:not-allowed;}
+.uno-card.playable{cursor:pointer;}
+.uno-card.playable:hover:not(.selected){transform:translateY(-6px);box-shadow:0 8px 20px rgba(0,0,0,.5);}
+.uno-card.gh-deal{animation:ghCardDeal .34s cubic-bezier(.2,1,.35,1) both;}
+@media (prefers-reduced-motion: reduce){.uno-card.gh-deal{animation:none!important;}}
+/* Suit colors */
+.uno-r{background:linear-gradient(145deg,#c01020,#ee3344);}
+.uno-g{background:linear-gradient(145deg,#156a20,#22aa44);}
+.uno-b{background:linear-gradient(145deg,#1040b0,#2266ee);}
+.uno-y{background:linear-gradient(145deg,#b08000,#eecc00);color:#111!important;}
+.uno-y .urank,.uno-y .usym{color:#111!important;text-shadow:none!important;}
+.uno-w{background:linear-gradient(145deg,#111,#333);}
+.uno-back{background:linear-gradient(135deg,#1a0a2a,#3a1060);border:3px solid #6030a0;cursor:default;}
+.uno-back::before{display:none;}
+/* Layout */
+.opp-hand{display:flex;gap:3px;flex-wrap:wrap;}
+.player-hand{display:flex;gap:5px;flex-wrap:wrap;padding:8px;}
+.center-area{display:flex;gap:16px;justify-content:center;align-items:center;flex-wrap:wrap;padding:12px;background:var(--surface);border-radius:10px;}
+.section-lbl{font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);letter-spacing:2px;margin-bottom:5px;}
+.msg-area{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;text-align:center;letter-spacing:1px;}
+.color-picker{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+.color-picker.show{display:flex;}
+.color-picker-title{font-family:'Orbitron',monospace;font-size:20px;font-weight:700;color:var(--accent);}
+.color-btns{display:flex;gap:12px;}
+.cbtn{width:70px;height:70px;border-radius:12px;border:3px solid rgba(255,255,255,.3);cursor:pointer;font-family:'Orbitron',monospace;font-size:13px;font-weight:700;transition:transform .15s;}
+.cbtn:hover{transform:scale(1.1);}
+.draw-btn{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;padding:10px 18px;border-radius:8px;border:2px solid var(--accent);color:var(--accent);background:var(--surface2);cursor:pointer;transition:all .2s;letter-spacing:1px;}
+.draw-btn:hover{background:rgba(240,192,64,.15);}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#ff4466">🎴 UNO</span>
+  <div class="h-btns">
+    <select id="mode-sel" onchange="initUno()">
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai" selected>VS AI</option>
+    </select>
+    <div class="info-pill">DECK: <span id="deck-cnt">0</span></div>
+    <button class="hbtn" onclick="initUno()">NEW GAME</button>
+  </div>
+</div>
+
+<div id="mode-pick" class="mode-wrap">
+  <div class="mode-title" style="color:#ff4466">UNO</div>
+  <div class="mode-btns">
+    <button class="mbtn blue" onclick="unoPickMode('2p')">👥 2 PLAYERS</button>
+    <button class="mbtn green" onclick="unoPickMode('ai')">🤖 VS AI</button>
+  </div>
+</div>
+
+<div id="uno-game" class="uno-wrap" style="display:none;"></div>
+
+<!-- Color picker -->
+<div class="color-picker" id="color-picker">
+  <div class="color-picker-title">CHOOSE COLOR</div>
+  <div class="color-btns">
+    <button class="cbtn uno-r" onclick="pickColor('r')">RED</button>
+    <button class="cbtn uno-g" onclick="pickColor('g')">GREEN</button>
+    <button class="cbtn uno-b" onclick="pickColor('b')">BLUE</button>
+    <button class="cbtn uno-y" onclick="pickColor('y')">YELLOW</button>
+  </div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="initUno()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+const UNO_COLORS=['r','g','b','y'];
+const UNO_COLOR_NAMES={r:'RED',g:'GREEN',b:'BLUE',y:'YELLOW'};
+let unoDeck=[],unoDiscard=[],unoHands=[[],[]],unoTurn=0,unoDir=1,unoMode='ai';
+let unoSelCard=null,unoMsg='',pendingCard=null,unoSkipNext=false;
+
+function unoPickMode(m){document.getElementById('mode-sel').value=m;initUno();}
+
+function initUno(){
+  document.getElementById('win-overlay').classList.remove('show');
+  unoMode=document.getElementById('mode-sel').value;
+  document.getElementById('mode-pick').style.display='none';
+  document.getElementById('uno-game').style.display='flex';
+  unoDeck=buildUnoDeck(); unoHands=[[],[]];
+  for(let i=0;i<7;i++){unoHands[0].push(unoDeck.pop());unoHands[1].push(unoDeck.pop());}
+  // start discard with a number
+  let start;do{start=unoDeck.pop();}while(start.type!=='num');
+  unoDiscard=[start]; unoTurn=0;unoDir=1;unoSelCard=null;unoMsg='';
+  document.getElementById('color-picker').classList.remove('show');
+  unoRender();
+  document.querySelectorAll('.uno-card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(Math.min(i,20)*34)+'ms';});
+}
+function ghUnoSlide(){ if(unoPendingSlide && window.GH){ GH.slide(unoPendingSlide.rect,'#uno-top',{bg:unoPendingSlide.bg}); unoPendingSlide=null; } }
+
+function buildUnoDeck(){
+  const d=[];
+  for(const c of UNO_COLORS){
+    d.push({c,v:'0',type:'num'});
+    for(let n=1;n<=9;n++){d.push({c,v:`${n}`,type:'num'});d.push({c,v:`${n}`,type:'num'});}
+    for(const a of['skip','skip','reverse','reverse','draw2','draw2'])d.push({c,v:a,type:'action'});
+  }
+  for(let i=0;i<4;i++){d.push({c:'w',v:'wild',type:'wild'});d.push({c:'w',v:'wild4',type:'wild4'});}
+  // shuffle
+  for(let i=d.length-1;i>0;i--){const j=0|Math.random()*(i+1);[d[i],d[j]]=[d[j],d[i]];}
+  return d;
+}
+
+function topCard(){return unoDiscard[unoDiscard.length-1];}
+
+function canPlay(card){
+  const top=topCard();
+  if(card.type==='wild'||card.type==='wild4')return true;
+  return card.c===top.c||card.v===top.v;
+}
+
+function cardLabel(card){
+  const map={skip:'⊘',reverse:'⇄',draw2:'+2',wild:'🌈',wild4:'+4'};
+  return map[card.v]||card.v;
+}
+
+function cardEl(card,extraClass='',onclick='',disabled=false){
+  const cls=`uno-card uno-${card.c} ${extraClass}${disabled?' disabled':''}`;
+  const big=card.v.length>2||card.v==='wild'||card.v==='wild4';
+  return `<div class="${cls}" ${onclick?`onclick="${onclick}"`:''} ${disabled?'':'style="cursor:pointer;"'}>
+    <div class="urank" style="font-size:${big?'14px':'22px'};">${cardLabel(card)}</div>
+    <div class="usym">${card.c!=='w'?card.c.toUpperCase():''}</div>
+  </div>`;
+}
+
+function unoRender(){
+  const wrap=document.getElementById('uno-game');
+  // In AI mode the human (0) is ALWAYS the bottom hand — never reveal AI cards
+  const p=unoMode==='ai'?0:unoTurn, opp=1-p;
+  const pName=p===0?'🟡 YOU':(unoMode==='ai'?'🤖 AI':'🟣 P2');
+  const oppName=opp===0?'🟡 YOU':(unoMode==='ai'?'🤖 AI':'🟣 P2');
+  const myTurn=unoTurn===p;
+  document.getElementById('deck-cnt').textContent=unoDeck.length;
+  const top=topCard();
+
+  let h='';
+  // Opponent hand (face-down)
+  h+=`<div style="background:var(--surface);border-radius:10px;padding:10px;">
+    <div class="section-lbl">${oppName}: ${unoHands[opp].length} CARDS</div>
+    <div class="opp-hand">`;
+  const showMax=Math.min(unoHands[opp].length,16);
+  for(let i=0;i<showMax;i++)h+=`<div class="uno-card uno-back" style="width:36px;height:52px;"></div>`;
+  if(unoHands[opp].length>showMax)h+=`<span style="font-family:'Orbitron',monospace;font-size:12px;color:var(--dim);align-self:center;">+${unoHands[opp].length-showMax}</span>`;
+  h+=`</div></div>`;
+
+  // Center
+  h+=`<div class="center-area">
+    <div>
+      <div class="section-lbl">DRAW PILE (${unoDeck.length})</div>
+      <div class="uno-card uno-back" style="cursor:pointer;" onclick="unoDraw()"></div>
+    </div>
+    <div>
+      <div class="section-lbl">TOP CARD</div>
+      <div id="uno-top">${cardEl(top,'','')}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
+      <div class="msg-area" style="color:${unoMsg.startsWith('❌')?'var(--red)':unoMsg.startsWith('🎉')?'var(--green)':'var(--accent)'};">${unoMsg}</div>
+      <div style="font-family:'Orbitron',monospace;font-size:12px;color:var(--dim);">
+        ${unoDir===1?'→ CLOCKWISE':'← COUNTER'}
+      </div>
+      ${myTurn?`<button class="draw-btn" onclick="unoDraw()">DRAW CARD</button>`:''}
+    </div>
+  </div>`;
+
+  // Player hand
+  h+=`<div style="background:var(--surface);border-radius:10px;padding:10px;">
+    <div class="section-lbl">${pName} — HAND (${unoHands[p].length} cards)${myTurn?' — YOUR TURN':' — WAITING…'}</div>
+    <div class="player-hand">`;
+  unoHands[p].forEach((card,i)=>{
+    const cp=myTurn&&canPlay(card);
+    const isSel=unoSelCard===i;
+    const cls=isSel?'selected':(cp?'playable':'');
+    h+=cardEl(card,cls,cp?`unoClickCard(${i})`:'',!cp);
+  });
+  if(!unoHands[p].length)h+=`<span style="color:var(--green);font-family:'Orbitron',monospace;font-size:14px;">🎉 NO CARDS LEFT!</span>`;
+  h+=`</div>`;
+  if(myTurn&&unoSelCard!==null&&unoHands[p][unoSelCard]&&canPlay(unoHands[p][unoSelCard]))
+    h+=`<div style="margin-top:8px;"><button class="draw-btn" onclick="unoPlaySelected()">▶ PLAY THIS CARD</button></div>`;
+  h+=`</div>`;
+
+  wrap.innerHTML=h;
+  ghUnoSlide();
+  // AI
+  if(unoMode==='ai'&&unoTurn===1)setTimeout(unoAiTurn,700);
+}
+
+function unoClickCard(i){
+  if(unoTurn===1&&unoMode==='ai')return;
+  if(!canPlay(unoHands[unoTurn][i])){unoMsg='❌ Cannot play that card!';unoRender();return;}
+  if(unoSelCard===i){unoPlaySelected();return;}
+  unoSelCard=i;unoMsg='';unoRender();
+}
+
+function unoPlaySelected(){
+  if(unoSelCard===null)return;
+  const card=unoHands[unoTurn][unoSelCard];
+  if(!canPlay(card)){unoMsg='❌ Cannot play that card!';unoSelCard=null;unoRender();return;}
+  if(card.type==='wild'||card.type==='wild4'){
+    pendingCard={...card,idx:unoSelCard};
+    if(unoMode==='ai'&&unoTurn===1){// AI picks best color
+      const freq={r:0,g:0,b:0,y:0};
+      unoHands[1].forEach(c=>{if(freq[c.c]!==undefined)freq[c.c]++;});
+      const best=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0];
+      pickColor(best);
+    } else {
+      document.getElementById('color-picker').classList.add('show');
+    }
+    return;
+  }
+  executePlay(unoSelCard,card);
+}
+
+function pickColor(c){
+  document.getElementById('color-picker').classList.remove('show');
+  if(!pendingCard)return;
+  const card={...pendingCard,c};
+  executePlay(pendingCard.idx,card);
+  pendingCard=null;
+}
+
+let unoPendingSlide=null;
+const UNO_BG={r:'linear-gradient(145deg,#c01020,#ee3344)',g:'linear-gradient(145deg,#156a20,#22aa44)',b:'linear-gradient(145deg,#1040b0,#2266ee)',y:'linear-gradient(145deg,#b08000,#eecc00)',w:'linear-gradient(145deg,#222,#555)'};
+function executePlay(idx,card){
+  const selEl=document.querySelector('.uno-card.selected');
+  if(selEl){ unoPendingSlide={rect:selEl.getBoundingClientRect(), bg:UNO_BG[card.c]||UNO_BG.w}; }
+  else { const aiSrc=document.querySelector('.opp-hand'); if(aiSrc){ const bb=aiSrc.lastElementChild||aiSrc; unoPendingSlide={rect:bb.getBoundingClientRect(), bg:UNO_BG[card.c]||UNO_BG.w}; } }
+  unoHands[unoTurn].splice(idx,1);
+  unoDiscard.push({...card});
+  unoSelCard=null;
+  if(!unoHands[unoTurn].length){
+    unoMsg='🎉 UNO! Last card played!';
+    const winner=unoTurn===0?'🏆 YOU WIN!':(unoMode==='ai'?'🤖 AI WINS!':'🏆 PLAYER 2 WINS!');
+    setTimeout(()=>{document.getElementById('win-msg').textContent=winner;document.getElementById('win-sub').textContent='With UNO!';document.getElementById('win-overlay').classList.add('show');},400);
+    return;
+  }
+  applyAction(card);
+}
+
+function applyAction(card){
+  const opp=1-unoTurn;
+  // In a 2-player game: skip, reverse, draw2 and wild4 all mean the same player goes again.
+  if(card.v==='skip'){unoMsg=`⊘ ${opp===0?'YOUR':'OPPONENT\'S'} TURN SKIPPED!`;}
+  else if(card.v==='reverse'){unoDir=-unoDir;unoMsg='⇄ REVERSED — PLAY AGAIN!';}
+  else if(card.v==='draw2'){for(let i=0;i<2;i++){if(!unoDeck.length)reshuffleDeck();if(unoDeck.length)unoHands[opp].push(unoDeck.pop());}unoMsg=`+2 — ${opp===0?'YOU DRAW':'OPPONENT DRAWS'} 2!`;}
+  else if(card.v==='wild4'){for(let i=0;i<4;i++){if(!unoDeck.length)reshuffleDeck();if(unoDeck.length)unoHands[opp].push(unoDeck.pop());}unoMsg=`+4 & COLOR → ${UNO_COLOR_NAMES[card.c]}!`;}
+  else if(card.v==='wild'){unoMsg=`COLOR → ${UNO_COLOR_NAMES[card.c]}!`;unoTurn=opp;}
+  else{unoMsg='';unoTurn=opp;}
+  unoRender();
+}
+
+function unoDraw(){
+  if(unoTurn===1&&unoMode==='ai')return;
+  if(!unoDeck.length)reshuffleDeck();
+  if(unoDeck.length){const c=unoDeck.pop();unoHands[unoTurn].push(c);unoMsg=`DREW: ${cardLabel(c)}`;}
+  else unoMsg='No cards left in deck!';
+  unoSelCard=null;
+  unoTurn=1-unoTurn;
+  unoRender();
+}
+
+function reshuffleDeck(){
+  if(unoDiscard.length<2)return;
+  const top=unoDiscard.pop();
+  for(let i=unoDiscard.length-1;i>0;i--){const j=0|Math.random()*(i+1);[unoDiscard[i],unoDiscard[j]]=[unoDiscard[j],unoDiscard[i]];}
+  // reset wilds back to colorless before returning them to the deck
+  unoDeck=unoDiscard.map(c=>(c.type==='wild'||c.type==='wild4')?{...c,c:'w'}:c);
+  unoDiscard=[top];
+}
+
+function unoAiTurn(){
+  if(unoTurn!==1)return;
+  const hand=unoHands[1];
+  const playable=hand.map((c,i)=>({c,i})).filter(({c})=>canPlay(c));
+  if(!playable.length){
+    if(!unoDeck.length)reshuffleDeck();
+    if(unoDeck.length){const c=unoDeck.pop();hand.push(c);}
+    unoTurn=0;unoMsg='🤖 AI draws a card.';unoRender();return;
+  }
+  // AI strategy: prefer draw2 > wild4 > skip > reverse > number, prefer same color as top
+  const top=topCard();
+  playable.sort((a,b)=>{
+    const score=c=>c.type==='wild4'?5:c.type==='wild'?4:c.v==='draw2'?3:c.v==='skip'?2:c.v==='reverse'?1:0;
+    const bonus=c=>(c.c===top.c)?1:0;
+    return (score(b.c)+bonus(b.c))-(score(a.c)+bonus(a.c));
+  });
+  const {c:card,i:idx}=playable[0];
+  if(card.type==='wild'||card.type==='wild4'){
+    const freq={r:0,g:0,b:0,y:0};hand.forEach(c=>{if(freq[c.c]!==undefined)freq[c.c]++;});
+    const best=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0];
+    pendingCard={...card,idx};
+    pickColor(best);
+  } else {
+    unoMsg=`🤖 AI plays ${cardLabel(card)}`;
+    executePlay(idx,card);
+  }
+}
+
+document.getElementById('mode-pick').style.display='flex';
+document.getElementById('uno-game').style.display='none';
+</script>
+</body>
+</html>

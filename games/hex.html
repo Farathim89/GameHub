@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hex</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.hx-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px;}
+#hexsvg{max-width:100%;touch-action:manipulation;}
+.hx-status{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;min-height:22px;letter-spacing:1px;}
+.hx-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">⬡ HEX</span>
+  <div class="h-btns">
+    <select id="mode-sel" onchange="newGame()">
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai" selected>VS AI</option>
+    </select>
+    <select id="size-sel" onchange="newGame()">
+      <option value="7">7×7</option>
+      <option value="9" selected>9×9</option>
+      <option value="11">11×11</option>
+    </select>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="hx-wrap">
+  <div class="hx-status" id="status">Your turn</div>
+  <div class="hx-hint"><b style="color:#e05050">RED (you)</b> connects top↔bottom · <b style="color:#5090e0">BLUE</b> connects left↔right. Place a stone on any empty cell.</div>
+  <svg id="hexsvg"></svg>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='hex';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const NB=[[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0]];
+let N=9, bd=[], turn=1, mode='ai', over=false, busy=false, s=22;
+// bd[r][c]: 0 empty, 1 red(you top-bottom), 2 blue(ai left-right)
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  mode=document.getElementById('mode-sel').value;
+  s=N<=7?26:N<=9?22:18;
+  bd=Array.from({length:N},()=>Array(N).fill(0)); turn=1; over=false; busy=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  draw(); setStatus();
+}
+function inB(r,c){ return r>=0&&r<N&&c>=0&&c<N; }
+function place(r,c){
+  if(over||busy||bd[r][c]!==0) return;
+  if(mode==='ai'&&turn===2) return;
+  doPlace(r,c,turn);
+}
+function doPlace(r,c,p){
+  bd[r][c]=p; sfx('place'); draw();
+  if(connected(p)) return win(p);
+  turn=p===1?2:1; setStatus();
+  if(mode==='ai'&&turn===2&&!over){ busy=true; setTimeout(aiMove,420); }
+}
+// distance to connect: 0-1 BFS, own=0 empty=1 opp=inf. edges per color
+function hexDist(me){
+  const dist=Array.from({length:N},()=>Array(N).fill(Infinity));
+  const dq=[]; // deque of [r,c]
+  const cost=(r,c)=> bd[r][c]===me?0 : bd[r][c]===0?1 : Infinity;
+  const startCells=[]; const endIs=(r,c)=> me===1? r===N-1 : c===N-1;
+  for(let i=0;i<N;i++){ const r=me===1?0:i, c=me===1?i:0; if(cost(r,c)<Infinity){ dist[r][c]=cost(r,c); dq.push([r,c]); } }
+  // simple Dijkstra (costs 0/1) with array+sort-light: use 0-1 BFS
+  dq.sort((a,b)=>dist[a[0]][a[1]]-dist[b[0]][b[1]]);
+  let head=0;
+  while(head<dq.length){
+    // pick current min (re-scan small)
+    let mi=head; for(let k=head+1;k<dq.length;k++) if(dist[dq[k][0]][dq[k][1]]<dist[dq[mi][0]][dq[mi][1]]) mi=k;
+    [dq[head],dq[mi]]=[dq[mi],dq[head]];
+    const [r,c]=dq[head++]; const d=dist[r][c];
+    for(const [dr,dc] of NB){ const nr=r+dr,nc=c+dc; if(!inB(nr,nc))continue; const cc=cost(nr,nc); if(cc===Infinity)continue; const nd=d+cc; if(nd<dist[nr][nc]){ dist[nr][nc]=nd; dq.push([nr,nc]); } }
+  }
+  let best=Infinity; for(let i=0;i<N;i++){ const r=me===1?N-1:i, c=me===1?i:N-1; if(dist[r][c]<best)best=dist[r][c]; }
+  return best;
+}
+function connected(me){ return hexDist(me)===0; }
+function aiMove(){
+  if(over)return; const me=2, opp=1;
+  let best=null,bs=-1e9;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ if(bd[r][c]!==0)continue;
+    bd[r][c]=me; const dMe=hexDist(me), dHu=hexDist(opp); bd[r][c]=0;
+    let score=(dHu - dMe) + Math.random()*0.3;
+    if(dMe===0) score+=100; // winning move
+    if(score>bs){ bs=score; best=[r,c]; }
+  }
+  busy=false;
+  if(best) doPlace(best[0],best[1],2);
+}
+function hexPts(cx,cy){ let p=''; for(let i=0;i<6;i++){ const a=Math.PI/180*(60*i-30); p+=(cx+s*Math.cos(a))+','+(cy+s*Math.sin(a))+' '; } return p; }
+function center(r,c){ const x=s*Math.sqrt(3)*(c + r/2) + s*2; const y=s*1.5*r + s*2; return [x,y]; }
+function draw(){
+  const svg=document.getElementById('hexsvg');
+  const w=s*Math.sqrt(3)*(N + N/2) + s*3, h=s*1.5*N + s*3;
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`); svg.setAttribute('width',Math.min(w, window.innerWidth-24)); svg.style.height='auto';
+  let g='';
+  // edge markers
+  for(let c=0;c<N;c++){ const [x0,y0]=center(0,c), [x1,y1]=center(N-1,c); g+=`<circle cx="${x0}" cy="${y0-s-2}" r="3" fill="#e05050"/><circle cx="${x1}" cy="${y1+s+2}" r="3" fill="#e05050"/>`; }
+  for(let r=0;r<N;r++){ const [x0,y0]=center(r,0), [x1,y1]=center(r,N-1); g+=`<circle cx="${x0-s-2}" cy="${y0}" r="3" fill="#5090e0"/><circle cx="${x1+s+2}" cy="${y1}" r="3" fill="#5090e0"/>`; }
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){ const [x,y]=center(r,c); const v=bd[r][c];
+    const fill=v===1?'#e05050':v===2?'#5090e0':'#1c1c28';
+    g+=`<polygon points="${hexPts(x,y)}" fill="${fill}" stroke="#555" stroke-width="1.5" style="cursor:pointer" onclick="place(${r},${c})"/>`;
+  }
+  svg.innerHTML=g;
+}
+function setStatus(){ if(over)return; const el=document.getElementById('status'); el.textContent=(mode==='ai'&&turn===2)?'🤖 AI thinking…':(turn===1?'🔴 Your turn (RED)':'🔵 Player 2 (BLUE)'); el.style.color=turn===1?'#e05050':'#5090e0'; }
+function win(p){ over=true; const youWin=p===1; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':(mode==='ai'?'🤖 AI WINS!':'🏆 BLUE WINS!');
+  document.getElementById('win-sub').textContent=(p===1?'Red':'Blue')+' connected its sides!';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+window.addEventListener('resize',()=>{ if(bd.length) draw(); });
+newGame();
+</script>
+</body>
+</html>

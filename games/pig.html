@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pig Dice</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.pg-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:18px 12px;}
+.pg-scores{display:flex;gap:40px;}
+.pg-s{font-family:'Orbitron',monospace;text-align:center;padding:14px 22px;border-radius:12px;border:2px solid var(--border);transition:all .2s;}
+.pg-s.active{border-color:var(--accent);box-shadow:0 0 16px rgba(240,192,64,.3);}
+.pg-s .v{font-size:34px;font-weight:900;} .pg-s .l{font-size:11px;color:var(--dim);letter-spacing:2px;}
+.pg-die{width:80px;height:80px;border-radius:16px;background:#f5f0e4;border:2px solid #333;position:relative;box-shadow:1px 3px 7px rgba(0,0,0,.4);}
+.pip{position:absolute;width:14px;height:14px;border-radius:50%;background:#111;}
+.pg-pot{font-family:'Orbitron',monospace;font-size:16px;color:var(--accent);min-height:24px;}
+.pg-controls{display:flex;gap:14px;}
+.pg-btn{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;padding:14px 28px;border-radius:10px;border:3px solid;cursor:pointer;background:var(--surface);letter-spacing:1px;}
+.pg-btn.roll{color:var(--accent);border-color:var(--accent);} .pg-btn.hold{color:var(--green);border-color:var(--green);}
+.pg-btn:disabled{opacity:.4;cursor:default;}
+.pg-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:420px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🐷 PIG</span>
+  <div class="h-btns"><div class="info-pill">TO WIN: 100</div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="pg-wrap">
+  <div class="pg-scores">
+    <div class="pg-s" id="box0" style="color:#f0c040"><div class="v" id="s0">0</div><div class="l">YOU</div></div>
+    <div class="pg-s" id="box1" style="color:#5090e0"><div class="v" id="s1">0</div><div class="l">AI</div></div>
+  </div>
+  <div class="pg-die" id="die"></div>
+  <div class="pg-pot" id="pot">Roll to begin!</div>
+  <div class="pg-controls">
+    <button class="pg-btn roll" id="rollBtn" onclick="roll()">🎲 ROLL</button>
+    <button class="pg-btn hold" id="holdBtn" onclick="hold()" disabled>✋ HOLD</button>
+  </div>
+  <div class="pg-hint">Roll to build points — but roll a <b>1</b> and you lose them all! Hold to bank. First to 100 wins.</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='pig';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const PIPS={1:[[1,1]],2:[[0,0],[2,2]],3:[[0,0],[1,1],[2,2]],4:[[0,0],[0,2],[2,0],[2,2]],5:[[0,0],[0,2],[1,1],[2,0],[2,2]],6:[[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]};
+let scores=[0,0], pot=0, turn=0, over=false, busy=false;
+function newGame(){ scores=[0,0]; pot=0; turn=0; over=false; busy=false; document.getElementById('win-overlay').classList.remove('show'); update(); setMsg('Roll to begin!'); drawDie(0); setBtns(); }
+function drawDie(v){ const d=document.getElementById('die'); d.innerHTML=''; if(!v)return; PIPS[v].forEach(([r,c])=>{const p=document.createElement('div');p.className='pip';p.style.left=(13+c*24)+'px';p.style.top=(13+r*24)+'px';d.appendChild(p);}); }
+function roll(){ if(over||busy||turn!==0)return; doRoll(0); }
+function doRoll(p){ const v=1+(0|Math.random()*6); drawDie(v); sfx('select');
+  if(v===1){ pot=0; setMsg((p===0?'You':'AI')+' rolled a 1 — pot lost!'); sfx('lose'); setTimeout(()=>endTurn(p),900); }
+  else { pot+=v; setMsg('Pot: '+pot+'  (total would be '+(scores[p]+pot)+')'); if(scores[p]+pot>=100){ scores[p]+=pot; return finish(); } if(p===0)setBtns(); }
+}
+function hold(){ if(over||turn!==0||pot===0)return; scores[0]+=pot; sfx('win'); pot=0; update(); if(scores[0]>=100)return finish(); endTurn(0); }
+function endTurn(p){ pot=0; drawDie(0); turn=1-turn; update(); setBtns(); if(turn===1&&!over){ busy=true; setMsg('🤖 AI\'s turn…'); setTimeout(aiTurn,800); } else setMsg('Your turn — roll!'); }
+function aiTurn(){ if(over)return;
+  // AI holds at 20 (or enough to win)
+  if(pot>=20 || scores[1]+pot>=100){ if(scores[1]+pot>=100){scores[1]+=pot;update();return finish();} scores[1]+=pot; pot=0; update(); sfx('win'); busy=false; return setTimeout(()=>endTurn(1),700); }
+  const v=1+(0|Math.random()*6); drawDie(v);
+  if(v===1){ pot=0; setMsg('AI rolled a 1!'); sfx('lose'); busy=false; return setTimeout(()=>endTurn(1),900); }
+  pot+=v; setMsg('AI pot: '+pot); setTimeout(aiTurn,750);
+}
+function setMsg(t){ document.getElementById('pot').textContent=t; }
+function setBtns(){ document.getElementById('rollBtn').disabled=over||turn!==0||busy; document.getElementById('holdBtn').disabled=over||turn!==0||pot===0||busy; }
+function update(){ document.getElementById('s0').textContent=scores[0]; document.getElementById('s1').textContent=scores[1]; document.getElementById('box0').classList.toggle('active',turn===0&&!over); document.getElementById('box1').classList.toggle('active',turn===1&&!over); }
+function finish(){ over=true; busy=false; update(); const youWin=scores[0]>=100; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 AI WINS!'; document.getElementById('win-sub').textContent='Final: You '+scores[0]+' · AI '+scores[1]; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

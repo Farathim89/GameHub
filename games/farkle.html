@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Farkle</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.fk-wrap{display:flex;flex-direction:column;align-items:center;gap:16px;padding:18px 12px;}
+.fk-scores{display:flex;gap:30px;}
+.fk-s{font-family:'Orbitron',monospace;text-align:center;}
+.fk-s .v{font-size:28px;font-weight:900;} .fk-s .l{font-size:11px;color:var(--dim);letter-spacing:2px;}
+.fk-dice{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;min-height:66px;}
+.die{width:60px;height:60px;border-radius:12px;background:#f5f0e4;border:2px solid #333;position:relative;box-shadow:1px 2px 5px rgba(0,0,0,.4);}
+.die.score{outline:3px solid var(--green);}
+.die.dead{opacity:.4;}
+.pip{position:absolute;width:11px;height:11px;border-radius:50%;background:#111;}
+.fk-turn{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;min-height:22px;letter-spacing:1px;}
+.fk-pot{font-family:'Orbitron',monospace;font-size:14px;color:var(--accent);}
+.fk-controls{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+.fk-btn{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:12px 24px;border-radius:9px;border:3px solid;cursor:pointer;letter-spacing:1px;background:var(--surface);}
+.fk-btn.roll{color:var(--accent);border-color:var(--accent);} .fk-btn.bank{color:var(--green);border-color:var(--green);}
+.fk-btn:disabled{opacity:.4;cursor:default;}
+.fk-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:460px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🎲 FARKLE</span>
+  <div class="h-btns">
+    <div class="info-pill">TO WIN: 5000</div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="fk-wrap">
+  <div class="fk-scores">
+    <div class="fk-s" style="color:#f0c040"><div class="v" id="s0">0</div><div class="l">YOU</div></div>
+    <div class="fk-s" style="color:#5090e0"><div class="v" id="s1">0</div><div class="l">AI</div></div>
+  </div>
+  <div class="fk-turn" id="turn">Your turn</div>
+  <div class="fk-pot" id="pot">Turn pot: 0</div>
+  <div class="fk-dice" id="dice"></div>
+  <div class="fk-controls">
+    <button class="fk-btn roll" id="rollBtn" onclick="roll()">🎲 ROLL</button>
+    <button class="fk-btn bank" id="bankBtn" onclick="bank()" disabled>🏦 BANK</button>
+  </div>
+  <div class="fk-hint">1 = 100 · 5 = 50 · three of a kind = face×100 (1s=1000) · 1–6 straight or 3 pairs = 1500. Roll no score = <b style="color:var(--red)">Farkle</b> (lose the pot)!</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='farkle';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const PIPS={1:[[1,1]],2:[[0,0],[2,2]],3:[[0,0],[1,1],[2,2]],4:[[0,0],[0,2],[2,0],[2,2]],5:[[0,0],[0,2],[1,1],[2,0],[2,2]],6:[[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]};
+const WIN=5000;
+let scores=[0,0], pot=0, diceLeft=6, dice=[], turn=0, over=false, busy=false, rolled=false;
+function newGame(){ scores=[0,0]; pot=0; diceLeft=6; dice=[]; turn=0; over=false; busy=false; rolled=false;
+  document.getElementById('win-overlay').classList.remove('show'); updateScores(); setTurn(); renderDice([]); setButtons();
+  document.getElementById('pot').textContent='Turn pot: 0'; }
+function scoreRoll(ds){
+  const cnt=[0,0,0,0,0,0,0]; ds.forEach(d=>cnt[d]++);
+  // straight
+  if(ds.length===6 && cnt.slice(1).every(c=>c===1)) return {score:1500, remaining:0, scoreMask:ds.map(()=>true)};
+  // three pairs
+  if(ds.length===6 && cnt.filter(c=>c===2).length===3) return {score:1500, remaining:0, scoreMask:ds.map(()=>true)};
+  let score=0; const used=[0,0,0,0,0,0,0];
+  for(let f=1;f<=6;f++){ if(cnt[f]>=3){ let base=f===1?1000:f*100; base*=Math.pow(2,cnt[f]-3); score+=base; used[f]=cnt[f]; } }
+  // singles 1 & 5 not in a triple
+  if(cnt[1]<3){ score+=cnt[1]*100; used[1]=cnt[1]; }
+  if(cnt[5]<3){ score+=cnt[5]*50; used[5]=cnt[5]; }
+  // scoring mask
+  const avail=cnt.slice(); const mask=ds.map(d=>{ if(used[d]>0){ used[d]--; return true; } return false; });
+  const remaining=mask.filter(m=>!m).length;
+  return {score, remaining, scoreMask:mask};
+}
+function roll(){
+  if(over||busy||(turn!==0)) return;
+  doRoll();
+}
+function doRoll(){
+  dice=[]; for(let i=0;i<diceLeft;i++) dice.push(1+(0|Math.random()*6));
+  rolled=true; sfx('select');
+  const res=scoreRoll(dice);
+  renderDice(res.scoreMask);
+  if(res.score===0){ // Farkle
+    setMsg('💥 FARKLE! No scoring dice — pot lost.');
+    pot=0; document.getElementById('pot').textContent='Turn pot: 0';
+    sfx('lose'); setButtons(); setTimeout(endTurn,1100); return;
+  }
+  pot+=res.score; sfx('coin');
+  diceLeft = res.remaining===0? 6 : res.remaining; // hot dice -> all 6
+  document.getElementById('pot').textContent='Turn pot: '+pot+(res.remaining===0?' 🔥 HOT DICE!':'');
+  setButtons();
+}
+function bank(){
+  if(over||turn!==0||pot===0) return;
+  scores[0]+=pot; sfx('win'); updateScores();
+  if(scores[0]>=WIN) return finish();
+  endTurn();
+}
+function endTurn(){
+  pot=0; diceLeft=6; rolled=false; document.getElementById('pot').textContent='Turn pot: 0'; renderDice([]);
+  turn=1-turn; setTurn(); setButtons();
+  if(turn===1&&!over){ busy=true; setTimeout(aiTurn,900); }
+}
+function aiTurn(){
+  if(over) return;
+  // AI: roll until pot>=400 (or risk), then bank. Bank if close to win.
+  dice=[]; for(let i=0;i<diceLeft;i++) dice.push(1+(0|Math.random()*6));
+  const res=scoreRoll(dice); renderDice(res.scoreMask);
+  if(res.score===0){ setMsg('🤖 AI FARKLED! Pot lost.'); pot=0; sfx('lose'); busy=false; return setTimeout(()=>{ turn=0; endTurnAfterAI(); },1100); }
+  pot+=res.score; diceLeft=res.remaining===0?6:res.remaining;
+  document.getElementById('pot').textContent='AI pot: '+pot;
+  const target = (scores[1]+pot>=WIN)?0 : (diceLeft<=2?300:500);
+  if(pot>=target || scores[1]+pot>=WIN){
+    scores[1]+=pot; updateScores(); sfx('win');
+    if(scores[1]>=WIN){ busy=false; return finish(); }
+    busy=false; setTimeout(()=>{ turn=0; endTurnAfterAI(); },800);
+  } else { setTimeout(aiTurn,850); }
+}
+function endTurnAfterAI(){ pot=0; diceLeft=6; rolled=false; document.getElementById('pot').textContent='Turn pot: 0'; renderDice([]); setTurn(); setButtons(); }
+function renderDice(mask){
+  const d=document.getElementById('dice'); d.innerHTML='';
+  dice.forEach((v,i)=>{ const die=document.createElement('div'); die.className='die'+(mask&&mask[i]?' score':(mask&&mask.length?' dead':''));
+    PIPS[v].forEach(([r,c])=>{ const p=document.createElement('div'); p.className='pip'; p.style.left=(8+c*18)+'px'; p.style.top=(8+r*18)+'px'; die.appendChild(p); });
+    d.appendChild(die);
+  });
+}
+function setMsg(t){ document.getElementById('turn').textContent=t; }
+function setTurn(){ if(over)return; const el=document.getElementById('turn'); el.textContent=turn===0?'Your turn':'🤖 AI\'s turn'; el.style.color=turn===0?'#f0c040':'#5090e0'; }
+function setButtons(){ document.getElementById('rollBtn').disabled=over||turn!==0||busy; document.getElementById('bankBtn').disabled=over||turn!==0||pot===0||busy; }
+function updateScores(){ document.getElementById('s0').textContent=scores[0]; document.getElementById('s1').textContent=scores[1]; }
+function finish(){ over=true; busy=false; const youWin=scores[0]>=WIN; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 AI WINS!'; document.getElementById('win-sub').textContent='Final: You '+scores[0]+' · AI '+scores[1];
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

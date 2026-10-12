@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TriPeaks</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.tp-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 8px;}
+.tp-board{position:relative;width:100%;max-width:620px;height:260px;}
+.card{position:absolute;width:58px;height:82px;font-size:19px;transition:box-shadow .12s,transform .12s;}
+.card .ctop{padding:4px 5px;}
+.card.play{cursor:pointer;box-shadow:0 0 0 2px var(--green),2px 3px 8px rgba(0,0,0,.5);}
+.card.play:hover{transform:translateY(-4px);}
+.card.block{opacity:.72;}
+.tp-bottom{display:flex;gap:20px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.tp-pile{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.tp-lbl{font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);letter-spacing:1px;}
+.tp-empty{width:58px;height:82px;border:2px dashed var(--border);border-radius:10px;}
+.tp-info{display:flex;gap:16px;font-family:'Orbitron',monospace;font-size:12px;}
+.tp-msg{font-family:'Orbitron',monospace;font-size:13px;min-height:20px;text-align:center;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">⛰️ TRIPEAKS</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="tp-wrap">
+  <div class="tp-msg" id="msg">Play cards one rank above or below the waste card (A wraps K↔2).</div>
+  <div class="tp-board" id="board"></div>
+  <div class="tp-bottom">
+    <div class="tp-pile"><div class="tp-lbl">STOCK (<span id="stockN">0</span>)</div><div id="stock"></div></div>
+    <div class="tp-pile"><div class="tp-lbl">WASTE</div><div id="waste"></div></div>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 CLEARED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='tripeaks';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const COVERS={0:[3,4],1:[5,6],2:[7,8],3:[9,10],4:[10,11],5:[12,13],6:[13,14],7:[15,16],8:[16,17],9:[18,19],10:[19,20],11:[20,21],12:[21,22],13:[22,23],14:[23,24],15:[24,25],16:[25,26],17:[26,27]};
+const XY=[[3,0],[9,0],[15,0],[2,1],[4,1],[8,1],[10,1],[14,1],[16,1],[1,2],[3,2],[5,2],[7,2],[9,2],[11,2],[13,2],[15,2],[17,2],[0,3],[2,3],[4,3],[6,3],[8,3],[10,3],[12,3],[14,3],[16,3],[18,3]];
+let tab=[], removed=[], stock=[], waste=[], score=0, streak=0, best=0, over=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  let deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck);
+  tab=[]; for(let i=0;i<28;i++) tab.push(deck.pop());
+  removed=Array(28).fill(false);
+  stock=deck; waste=[deck.pop? stock.pop():stock.pop()];
+  waste=[stock.pop()];
+  score=0; streak=0; over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('best').textContent=best;
+  render();
+  document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*22)+'ms';});
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function exposed(i){ if(removed[i])return false; const ch=COVERS[i]; if(!ch)return true; return removed[ch[0]]&&removed[ch[1]]; }
+function wasteTop(){ return waste[waste.length-1]; }
+function matches(card){ const w=wasteTop(); if(!w)return false; const d=Math.abs(card.r-w.r); return d===1||d===12; }
+function cardHTML(card,cls){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'} ${cls||''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function render(){
+  const b=document.getElementById('board'); b.innerHTML='';
+  const maxW=Math.min(620,window.innerWidth-16); const cw=Math.min(58, maxW/11); const ch=cw*1.42; const ux=(maxW-cw)/18; const uy=ch*0.52;
+  for(let i=0;i<28;i++){ if(removed[i])continue; const [gx,gy]=XY[i]; const exp=exposed(i); const play=exp&&matches(tab[i]);
+    const div=document.createElement('div'); div.innerHTML=cardHTML(tab[i], (play?'play':'block')); const el=div.firstChild;
+    el.style.left=(gx*ux)+'px'; el.style.top=(gy*uy)+'px'; el.style.width=cw+'px'; el.style.height=ch+'px'; el.style.zIndex=gy+1;
+    if(play) el.onclick=()=>playCard(i);
+    b.appendChild(el);
+  }
+  const st=document.getElementById('stock'); st.innerHTML = stock.length? '<div class="card back" style="cursor:pointer"></div>':'<div class="tp-empty"></div>'; if(stock.length)st.firstChild.onclick=drawStock;
+  document.getElementById('stockN').textContent=stock.length;
+  document.getElementById('waste').innerHTML = waste.length? cardHTML(wasteTop()):'<div class="tp-empty"></div>';
+  document.getElementById('score').textContent=score;
+  if(tab.every((_,i)=>removed[i]) && !over) return win();
+  checkStuck();
+}
+function playCard(i){
+  if(over||removed[i]||!(exposed(i)&&matches(tab[i]))) { sfx('error'); return; }
+  removed[i]=true; waste.push(tab[i]); streak++; score+=streak*5; sfx('pop');
+  document.getElementById('msg').textContent='Nice! Streak ×'+streak;
+  render();
+}
+function drawStock(){
+  if(over||!stock.length) return;
+  waste.push(stock.pop()); streak=0; sfx('flip');
+  document.getElementById('msg').textContent='Drew a card (streak reset).';
+  render();
+}
+function anyMove(){ for(let i=0;i<28;i++) if(exposed(i)&&matches(tab[i])) return true; return false; }
+function checkStuck(){ if(over)return; if(!anyMove()&&!stock.length){ over=true; const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-msg').textContent='🚫 NO MOVES'; document.getElementById('win-sub').textContent='Score '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); } }
+function win(){
+  over=true; score+=100; const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-msg').textContent='🏆 CLEARED!';
+  document.getElementById('win-sub').textContent='All three peaks cleared! Score '+score+(r.isBest?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+window.addEventListener('resize',()=>{ if(tab.length) render(); });
+newGame();
+</script>
+</body>
+</html>

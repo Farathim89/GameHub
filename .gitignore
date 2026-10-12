@@ -1,0 +1,17 @@
+# PyInstaller build artifacts (GameHub.exe itself is committed for one-click download)
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+
+# OS / editor cruft
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+
+# Local scratch / notes
+/notes/
+/scratch/
+*.log

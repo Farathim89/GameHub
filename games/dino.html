@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dino Run</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.dn-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 10px;}
+#dino{background:#0d1018;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.dn-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🦖 DINO RUN</span>
+  <div class="h-btns"><div class="info-pill">SCORE: <span id="score">0</span></div><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="dn-wrap">
+  <div class="dn-hint">Space / ↑ / tap to <b>jump</b> · ↓ to <b>duck</b>. Dodge the cacti and birds!</div>
+  <canvas id="dino" width="640" height="240"></canvas>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='dino';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('dino'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, GROUND=H-34, GRAV=0.7;
+let dino, obstacles, score, best, speed, over, raf, spawnT, ducking, started;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+function newGame(){ dino={x:60,y:GROUND,vy:0,w:40,h:44,onGround:true}; obstacles=[]; score=0; speed=6; over=false; spawnT=0; ducking=false; started=false;
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; cancelAnimationFrame(raf); draw(); raf=requestAnimationFrame(loop); }
+function jump(){ if(over){return;} started=true; if(dino.onGround){ dino.vy=-13; dino.onGround=false; sfx('flip'); } }
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  if(!started) return;
+  dino.vy+=GRAV; dino.y+=dino.vy; if(dino.y>=GROUND){ dino.y=GROUND; dino.vy=0; dino.onGround=true; }
+  dino.h = (ducking&&dino.onGround)?26:44;
+  score+=0.15; speed=6+score*0.012;
+  spawnT--; if(spawnT<=0){ spawnObstacle(); spawnT = Math.max(45, 90 - score*0.3) + Math.random()*40; }
+  obstacles.forEach(o=>o.x-=speed); obstacles=obstacles.filter(o=>o.x+o.w>-5);
+  const dh=dino.h, dtop=dino.y-dh;
+  for(const o of obstacles){ if(dino.x+dino.w-8>o.x && dino.x+8<o.x+o.w){ const otop=o.y-o.h; if(dtop < o.y && dino.y > otop){ return gameOver(); } } }
+  document.getElementById('score').textContent=Math.floor(score);
+}
+function spawnObstacle(){
+  if(Math.random()<0.3 && score>8){ // bird (duck under or jump over)
+    const hgt=[GROUND-70, GROUND-30][0|Math.random()*2];
+    obstacles.push({x:W, y:hgt, w:34, h:24, bird:true});
+  } else { const n=1+(0|Math.random()*3); obstacles.push({x:W, y:GROUND, w:16*n, h:30+(0|Math.random()*16)}); }
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#445'; ctx.beginPath(); ctx.moveTo(0,GROUND+2); ctx.lineTo(W,GROUND+2); ctx.stroke();
+  // dino
+  ctx.fillStyle='#40c0a0'; const dh=dino.h; ctx.fillRect(dino.x,dino.y-dh,dino.w,dh);
+  ctx.fillStyle='#0d1018'; ctx.fillRect(dino.x+dino.w-12,dino.y-dh+6,5,5);
+  // obstacles
+  for(const o of obstacles){ if(o.bird){ ctx.fillStyle='#e05050'; ctx.fillRect(o.x,o.y-o.h,o.w,o.h); ctx.fillRect(o.x-6,o.y-o.h+4,8,4); } else { ctx.fillStyle='#50a060'; ctx.fillRect(o.x,o.y-o.h,o.w,o.h); } }
+  if(!started){ ctx.fillStyle='rgba(255,255,255,.8)'; ctx.font='16px Orbitron,monospace'; ctx.textAlign='center'; ctx.fillText('TAP / SPACE TO START',W/2,H/2-30); }
+}
+function gameOver(){ over=true; const r=window.GH?GH.score.best(GAME,'best',Math.floor(score),'high'):{value:score,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Score '+Math.floor(score)+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250); }
+cv.addEventListener('mousedown',e=>{e.preventDefault();jump();});
+cv.addEventListener('touchstart',e=>{e.preventDefault();jump();},{passive:false});
+document.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='ArrowUp'||e.key==='w'){jump();e.preventDefault();} if(e.key==='ArrowDown'||e.key==='s'){ducking=true;started=true;e.preventDefault();} });
+document.addEventListener('keyup',e=>{ if(e.key==='ArrowDown'||e.key==='s')ducking=false; });
+newGame();
+</script>
+</body>
+</html>

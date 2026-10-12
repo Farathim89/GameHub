@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>4 In A Row</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.c4-wrap{display:flex;flex-direction:column;align-items:center;padding:16px;gap:12px;flex:1;}
+.c4-board-wrap{
+  background:linear-gradient(160deg,#1a3aaa,#0a1a6a);
+  border:3px solid #2a4aee;border-radius:14px;
+  padding:10px;
+  box-shadow:0 8px 40px rgba(10,30,150,.5);
+  display:inline-block;
+}
+.drop-row{display:flex;gap:8px;margin-bottom:6px;padding:0 4px;}
+.drop-btn{
+  width:var(--cs);height:28px;background:transparent;border:none;
+  cursor:pointer;font-size:18px;color:rgba(255,255,255,.25);
+  display:flex;align-items:center;justify-content:center;
+  border-radius:6px;transition:all .15s;flex-shrink:0;
+}
+.drop-btn:hover{color:rgba(255,255,255,.8);background:rgba(255,255,255,.08);}
+.drop-btn.p1-hover{color:#ffcc00;}
+.drop-btn.p2-hover{color:#ff3355;}
+.c4-grid{display:grid;gap:8px;}
+.c4-cell{
+  width:var(--cs);height:var(--cs);border-radius:50%;
+  background:rgba(0,0,30,.6);
+  border:2px solid rgba(255,255,255,.08);
+  box-shadow:inset 0 3px 8px rgba(0,0,0,.5);
+  transition:background .2s,box-shadow .2s;
+  cursor:pointer;flex-shrink:0;
+}
+.c4-cell.p1{
+  background:radial-gradient(circle at 35% 30%,#ffe060,#cc8800);
+  border-color:#ffcc00;
+  box-shadow:0 0 14px rgba(255,200,0,.5),inset 0 -3px 6px rgba(0,0,0,.3);
+}
+.c4-cell.p2{
+  background:radial-gradient(circle at 35% 30%,#ff7788,#cc1133);
+  border-color:#ff3355;
+  box-shadow:0 0 14px rgba(255,50,80,.5),inset 0 -3px 6px rgba(0,0,0,.3);
+}
+.c4-cell.win{
+  animation:pulse4 .5s infinite alternate;
+  border-color:#fff!important;
+}
+@keyframes pulse4{
+  from{box-shadow:0 0 0 3px #fff,0 0 16px rgba(255,255,255,.5);}
+  to{box-shadow:0 0 0 5px #fff,0 0 30px rgba(255,255,255,.9);}
+}
+:root{--cs:clamp(36px,min(9vw,calc((100vh - 240px)/6)),64px);}
+.turn-pill{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;padding:9px 22px;border-radius:8px;border:2px solid;letter-spacing:2px;transition:all .3s;}
+.c4-legend{display:flex;gap:20px;font-family:'Orbitron',monospace;font-size:12px;letter-spacing:1px;}
+.legend-item{display:flex;align-items:center;gap:6px;}
+.legend-dot{width:18px;height:18px;border-radius:50%;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#fb923c">🟡 4 IN A ROW</span>
+  <div class="h-btns">
+    <select id="mode-sel" onchange="initC4()">
+      <option value="2p">2 PLAYERS</option>
+      <option value="ai-easy">VS AI (Easy)</option>
+      <option value="ai-hard" selected>VS AI (Hard)</option>
+    </select>
+    <button class="hbtn" onclick="initC4()">NEW GAME</button>
+  </div>
+</div>
+
+<div id="mode-pick" class="mode-wrap">
+  <div class="mode-title" style="color:#fb923c">4 IN A ROW</div>
+  <div class="mode-btns">
+    <button class="mbtn blue" onclick="c4PickMode('2p')">👥 2 PLAYERS</button>
+    <button class="mbtn green" onclick="c4PickMode('ai-easy')">🤖 VS AI (Easy)</button>
+    <button class="mbtn accent" onclick="c4PickMode('ai-hard')">🤖 VS AI (Hard)</button>
+  </div>
+</div>
+
+<div id="c4-game" style="display:none;">
+  <div class="c4-wrap">
+    <div class="turn-pill" id="c4-turn">🟡 PLAYER 1'S TURN</div>
+    <div class="c4-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:radial-gradient(circle at 35% 30%,#ffe060,#cc8800);border:2px solid #ffcc00;"></div><span style="color:#ffcc00;">PLAYER 1</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:radial-gradient(circle at 35% 30%,#ff7788,#cc1133);border:2px solid #ff3355;"></div><span style="color:#ff3355;" id="p2-label">PLAYER 2</span></div>
+    </div>
+    <div class="c4-board-wrap">
+      <div class="drop-row" id="c4-drop-row"></div>
+      <div class="c4-grid" id="c4-grid" style="grid-template-columns:repeat(7,var(--cs));"></div>
+    </div>
+  </div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="initC4()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+const ROWS=6,COLS=7;
+let board=[], c4Turn=1, c4Mode='ai-hard', c4Over=false, aiDepth=5;
+
+function c4PickMode(m){document.getElementById('mode-sel').value=m;initC4();}
+
+function initC4(){
+  c4Mode=document.getElementById('mode-sel').value;
+  aiDepth=c4Mode==='ai-easy'?2:5;
+  document.getElementById('mode-pick').style.display='none';
+  document.getElementById('c4-game').style.display='block';
+  document.getElementById('p2-label').textContent=c4Mode==='2p'?'PLAYER 2':'AI';
+  document.getElementById('win-overlay').classList.remove('show');
+  board=Array(ROWS*COLS).fill(0);
+  c4Turn=1;c4Over=false;
+  renderC4();updateC4Turn();
+}
+
+const idx=(r,c)=>r*COLS+c;
+
+function renderC4(winCells=[]){
+  // Drop buttons
+  const dr=document.getElementById('c4-drop-row');
+  dr.innerHTML='';
+  for(let c=0;c<COLS;c++){
+    const btn=document.createElement('button');
+    btn.className=`drop-btn ${c4Turn===1?'p1-hover':'p2-hover'}`;
+    btn.textContent='▼';
+    btn.onclick=()=>drop(c);
+    dr.appendChild(btn);
+  }
+  // Grid
+  const g=document.getElementById('c4-grid');
+  g.innerHTML='';
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const sq=idx(r,c);
+    const div=document.createElement('div');
+    div.className='c4-cell'+(board[sq]===1?' p1':board[sq]===2?' p2':'');
+    if(winCells.includes(sq))div.classList.add('win');
+    div.onclick=()=>drop(c);
+    g.appendChild(div);
+  }
+}
+
+function updateC4Turn(){
+  const el=document.getElementById('c4-turn');
+  if(c4Turn===1){el.textContent='🟡 PLAYER 1\'S TURN';el.style.color='#ffcc00';el.style.borderColor='#ffcc00';}
+  else{
+    const n=c4Mode==='2p'?'PLAYER 2':'AI';
+    el.textContent=`🔴 ${n}'S TURN`;el.style.color='#ff3355';el.style.borderColor='#ff3355';
+  }
+}
+
+function drop(col){
+  if(c4Over)return;
+  if(c4Mode!=='2p'&&c4Turn===2)return;
+  doDropCol(col);
+}
+
+function doDropCol(col){
+  // find lowest empty row
+  let row=-1;
+  for(let r=ROWS-1;r>=0;r--){if(!board[idx(r,col)]){row=r;break;}}
+  if(row<0)return; // column full
+
+  board[idx(row,col)]=c4Turn;
+  const wins=checkWin(row,col,c4Turn);
+  renderC4(wins);
+
+  if(wins.length){
+    c4Over=true;
+    const winner=c4Turn===1?'🟡 PLAYER 1 WINS!':(c4Mode==='2p'?'🔴 PLAYER 2 WINS!':'🤖 AI WINS!');
+    setTimeout(()=>{document.getElementById('win-msg').textContent=winner;document.getElementById('win-sub').textContent='Connected 4 in a row!';document.getElementById('win-overlay').classList.add('show');},400);
+    return;
+  }
+  if(board.every(x=>x)){
+    c4Over=true;
+    setTimeout(()=>{document.getElementById('win-msg').textContent='🤝 IT\'S A DRAW!';document.getElementById('win-sub').textContent='Board is full';document.getElementById('win-overlay').classList.add('show');},300);
+    return;
+  }
+  c4Turn=3-c4Turn;
+  updateC4Turn();
+  renderC4();
+  if(c4Mode!=='2p'&&c4Turn===2)setTimeout(aiMoveC4,350);
+}
+
+function checkWin(r,c,player){
+  const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    const line=[idx(r,c)];
+    for(const s of[-1,1]){
+      let nr=r+dr*s,nc=c+dc*s;
+      while(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&board[idx(nr,nc)]===player){
+        line.push(idx(nr,nc));nr+=dr*s;nc+=dc*s;
+      }
+    }
+    if(line.length>=4)return line;
+  }
+  return[];
+}
+
+// ── MINIMAX AI ─────────────────────────────────────────────
+function getValidCols(){return [...Array(COLS).keys()].filter(c=>{for(let r=ROWS-1;r>=0;r--)if(!board[idx(r,c)])return true;return false;});}
+
+function scoreWindow(window,player){
+  const opp=3-player;
+  const pc=window.filter(x=>x===player).length;
+  const ec=window.filter(x=>x===0).length;
+  const oc=window.filter(x=>x===opp).length;
+  if(pc===4)return 100;
+  if(pc===3&&ec===1)return 5;
+  if(pc===2&&ec===2)return 2;
+  if(oc===3&&ec===1)return -80;
+  return 0;
+}
+
+function scoreBoard(player){
+  let score=0;
+  // center column bonus
+  for(let r=0;r<ROWS;r++)if(board[idx(r,3)]===player)score+=3;
+  // horizontal
+  for(let r=0;r<ROWS;r++) for(let c=0;c<=COLS-4;c++)score+=scoreWindow([board[idx(r,c)],board[idx(r,c+1)],board[idx(r,c+2)],board[idx(r,c+3)]],player);
+  // vertical
+  for(let c=0;c<COLS;c++) for(let r=0;r<=ROWS-4;r++)score+=scoreWindow([board[idx(r,c)],board[idx(r+1,c)],board[idx(r+2,c)],board[idx(r+3,c)]],player);
+  // diagonal /
+  for(let r=3;r<ROWS;r++) for(let c=0;c<=COLS-4;c++)score+=scoreWindow([board[idx(r,c)],board[idx(r-1,c+1)],board[idx(r-2,c+2)],board[idx(r-3,c+3)]],player);
+  // diagonal \
+  for(let r=0;r<=ROWS-4;r++) for(let c=0;c<=COLS-4;c++)score+=scoreWindow([board[idx(r,c)],board[idx(r+1,c+1)],board[idx(r+2,c+2)],board[idx(r+3,c+3)]],player);
+  return score;
+}
+
+function isTerminal(){
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(board[idx(r,c)]&&checkWin(r,c,board[idx(r,c)]).length)return true;
+  return board.every(x=>x);
+}
+
+function dropTemp(col,player){for(let r=ROWS-1;r>=0;r--)if(!board[idx(r,col)]){board[idx(r,col)]=player;return r;}return-1;}
+function undropTemp(row,col){board[idx(row,col)]=0;}
+
+function minimax(depth,alpha,beta,maximize){
+  if(isTerminal()){
+    if(checkWin_board(2))return 1000000;
+    if(checkWin_board(1))return -1000000;
+    return 0;
+  }
+  if(depth===0)return scoreBoard(2)-scoreBoard(1);
+  const cols=getValidCols();
+  // try center first for better pruning
+  cols.sort((a,b)=>Math.abs(a-3)-Math.abs(b-3));
+  if(maximize){
+    let best=-Infinity;
+    for(const col of cols){
+      const r=dropTemp(col,2);if(r<0)continue;
+      const v=minimax(depth-1,alpha,beta,false);
+      undropTemp(r,col);
+      best=Math.max(best,v);alpha=Math.max(alpha,v);
+      if(beta<=alpha)break;
+    }
+    return best;
+  } else {
+    let best=Infinity;
+    for(const col of cols){
+      const r=dropTemp(col,1);if(r<0)continue;
+      const v=minimax(depth-1,alpha,beta,true);
+      undropTemp(r,col);
+      best=Math.min(best,v);beta=Math.min(beta,v);
+      if(beta<=alpha)break;
+    }
+    return best;
+  }
+}
+
+function checkWin_board(player){
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(board[idx(r,c)]===player&&checkWin(r,c,player).length)return true;
+  return false;
+}
+
+function aiMoveC4(){
+  if(c4Over)return;
+  const cols=getValidCols();
+  if(!cols.length)return;
+
+  // Check immediate win
+  for(const col of cols){const r=dropTemp(col,2);if(r>=0){const w=checkWin(r,col,2).length;undropTemp(r,col);if(w)return doDropCol(col);}}
+  // Block immediate loss
+  for(const col of cols){const r=dropTemp(col,1);if(r>=0){const w=checkWin(r,col,1).length;undropTemp(r,col);if(w)return doDropCol(col);}}
+
+  // Minimax
+  let bestV=-Infinity,bestCol=cols[0];
+  const order=[...cols].sort((a,b)=>Math.abs(a-3)-Math.abs(b-3));
+  for(const col of order){
+    const r=dropTemp(col,2);if(r<0)continue;
+    const v=minimax(aiDepth-1,-Infinity,Infinity,false);
+    undropTemp(r,col);
+    if(v>bestV){bestV=v;bestCol=col;}
+  }
+  doDropCol(bestCol);
+}
+
+document.getElementById('mode-pick').style.display='flex';
+document.getElementById('c4-game').style.display='none';
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Breakout</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.bk-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 10px;}
+#brk{background:#0a0a0a;border:2px solid var(--border);border-radius:12px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.bk-bar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.bk-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">🧱 BREAKOUT</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">LIVES: <span id="lives">3</span></div>
+    <div class="info-pill">LEVEL: <span id="level">1</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+
+<div class="bk-wrap">
+  <div class="bk-hint">Move paddle: <b>mouse / touch / ← →</b>. <span id="launch-hint">Click or press Space to launch.</span></div>
+  <canvas id="brk" width="640" height="460"></canvas>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 CLEARED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" id="next-btn" onclick="nextOrNew()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+const cv=document.getElementById('brk'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height;
+const COLS=10, ROWS=6, BW=Math.floor((W-40)/COLS), BH=20, BTOP=50, BGAP=4;
+const COLORS=['#e05050','#f0a040','#f0c040','#40c0a0','#5090e0','#c080e0'];
+let paddle, ball, bricks, score, lives, level, stuck, running, raf, left=false, right=false, won=false;
+
+function newGame(){ score=0; lives=3; level=1; startLevel(); }
+
+function startLevel(){
+  document.getElementById('win-overlay').classList.remove('show');
+  paddle={w:96,h:13,x:(W-96)/2,y:H-26,speed:8};
+  bricks=[];
+  const rows=Math.min(ROWS, 3+level);
+  for(let r=0;r<rows;r++)for(let c=0;c<COLS;c++)
+    bricks.push({x:20+c*BW,y:BTOP+r*(BH+BGAP),w:BW-BGAP,h:BH,c:COLORS[r%COLORS.length],alive:true});
+  resetBall();
+  won=false; running=true;
+  updateHud();
+  cancelAnimationFrame(raf); loop();
+}
+
+function resetBall(){
+  stuck=true;
+  const sp=4+level*0.5;
+  ball={x:paddle.x+paddle.w/2,y:paddle.y-9,r:8,vx:0,vy:0,sp:Math.min(sp,7)};
+  document.getElementById('launch-hint').style.display='';
+}
+function launch(){
+  if(!stuck) return;
+  stuck=false;
+  const ang=(Math.random()*0.5-0.25)-Math.PI/2;
+  ball.vx=ball.sp*Math.cos(ang); ball.vy=ball.sp*Math.sin(ang);
+  document.getElementById('launch-hint').style.display='none';
+}
+
+function loop(){ if(!running)return; update(); draw(); raf=requestAnimationFrame(loop); }
+
+function update(){
+  if(left) paddle.x-=paddle.speed;
+  if(right) paddle.x+=paddle.speed;
+  paddle.x=Math.max(0,Math.min(W-paddle.w,paddle.x));
+  if(stuck){ ball.x=paddle.x+paddle.w/2; ball.y=paddle.y-9; return; }
+
+  ball.x+=ball.vx; ball.y+=ball.vy;
+  if(ball.x<ball.r){ball.x=ball.r;ball.vx*=-1;}
+  if(ball.x>W-ball.r){ball.x=W-ball.r;ball.vx*=-1;}
+  if(ball.y<ball.r){ball.y=ball.r;ball.vy*=-1;}
+
+  // paddle
+  if(ball.vy>0 && ball.y+ball.r>=paddle.y && ball.y+ball.r<=paddle.y+paddle.h+ball.r &&
+     ball.x>=paddle.x-ball.r && ball.x<=paddle.x+paddle.w+ball.r){
+    ball.y=paddle.y-ball.r;
+    const rel=(ball.x-(paddle.x+paddle.w/2))/(paddle.w/2);
+    const ang=rel*1.05-Math.PI/2;
+    const sp=Math.hypot(ball.vx,ball.vy);
+    ball.vx=sp*Math.cos(ang); ball.vy=sp*Math.sin(ang);
+  }
+
+  // bricks
+  for(const b of bricks){
+    if(!b.alive) continue;
+    if(ball.x+ball.r>b.x && ball.x-ball.r<b.x+b.w && ball.y+ball.r>b.y && ball.y-ball.r<b.y+b.h){
+      b.alive=false; score+=10; updateHud();
+      // reflect on the smaller overlap axis
+      const overlapX=Math.min(ball.x+ball.r-b.x, b.x+b.w-(ball.x-ball.r));
+      const overlapY=Math.min(ball.y+ball.r-b.y, b.y+b.h-(ball.y-ball.r));
+      if(overlapX<overlapY) ball.vx*=-1; else ball.vy*=-1;
+      break;
+    }
+  }
+
+  if(bricks.every(b=>!b.alive)){ running=false; levelCleared(); return; }
+
+  // lost ball
+  if(ball.y>H+ball.r){
+    lives--; updateHud();
+    if(lives<=0){ running=false; gameOver(); }
+    else resetBall();
+  }
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  for(const b of bricks){ if(!b.alive)continue;
+    ctx.fillStyle=b.c; roundRect(b.x,b.y,b.w,b.h,4); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fillRect(b.x,b.y,b.w,4);
+  }
+  ctx.fillStyle='#f0f0f0'; roundRect(paddle.x,paddle.y,paddle.w,paddle.h,6); ctx.fill();
+  ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,7); ctx.fillStyle='#f0c040'; ctx.fill();
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+function updateHud(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('lives').textContent=lives;
+  document.getElementById('level').textContent=level;
+}
+function levelCleared(){
+  level++; won=true;
+  document.getElementById('win-msg').textContent='✅ LEVEL '+(level-1)+' CLEARED!';
+  document.getElementById('win-sub').textContent='Score: '+score+' — ready for level '+level+'?';
+  document.getElementById('next-btn').textContent='NEXT LEVEL →';
+  document.getElementById('win-overlay').classList.add('show');
+}
+function gameOver(){
+  won=false;
+  document.getElementById('win-msg').textContent='💥 GAME OVER';
+  document.getElementById('win-sub').textContent='Final score: '+score+' (level '+level+')';
+  document.getElementById('next-btn').textContent='PLAY AGAIN';
+  document.getElementById('win-overlay').classList.add('show');
+}
+function nextOrNew(){ if(won) startLevel(); else newGame(); }
+
+function movePaddle(clientX){
+  const rect=cv.getBoundingClientRect(); const scale=W/rect.width;
+  paddle.x=(clientX-rect.left)*scale-paddle.w/2;
+  paddle.x=Math.max(0,Math.min(W-paddle.w,paddle.x));
+}
+cv.addEventListener('mousemove',e=>movePaddle(e.clientX));
+cv.addEventListener('mousedown',launch);
+cv.addEventListener('touchmove',e=>{e.preventDefault();movePaddle(e.touches[0].clientX);},{passive:false});
+cv.addEventListener('touchstart',e=>{e.preventDefault();movePaddle(e.touches[0].clientX);launch();},{passive:false});
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a'){left=true;e.preventDefault();}
+  if(e.key==='ArrowRight'||e.key==='d'){right=true;e.preventDefault();}
+  if(e.key===' '){launch();e.preventDefault();}
+});
+document.addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a')left=false;
+  if(e.key==='ArrowRight'||e.key==='d')right=false;
+});
+newGame();
+</script>
+</body>
+</html>

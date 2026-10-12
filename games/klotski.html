@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Klotski</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.kl-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px;}
+.kl-board{position:relative;background:#241408;border:3px solid #5a3c20;border-radius:12px;padding:6px;box-shadow:0 8px 30px rgba(0,0,0,.6);}
+.kl-exit{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);height:6px;background:var(--green);border-radius:3px;}
+.kl-block{position:absolute;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;color:#fff;transition:left .12s,top .12s;border:2px solid rgba(255,255,255,.25);box-shadow:inset 0 2px 6px rgba(255,255,255,.15),0 3px 6px rgba(0,0,0,.4);user-select:none;}
+.kl-block.target{background:linear-gradient(145deg,#e05050,#a02020);font-size:24px;}
+.kl-block.vert{background:linear-gradient(145deg,#5090e0,#2a5aa0);}
+.kl-block.horiz{background:linear-gradient(145deg,#40c0a0,#208060);}
+.kl-block.small{background:linear-gradient(145deg,#f0c040,#b08000);color:#111;}
+.kl-block.sel{box-shadow:0 0 0 3px var(--accent),0 3px 10px rgba(0,0,0,.6);}
+.kl-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;max-width:440px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">🧱 KLOTSKI</span>
+  <div class="h-btns">
+    <div class="info-pill">MOVES: <span id="moves">0</span></div>
+    <div class="info-pill">BEST: <span id="best">—</span></div>
+    <button class="hbtn" onclick="newGame()">RESET</button>
+  </div>
+</div>
+<div class="kl-wrap">
+  <div class="kl-hint">Slide the blocks and get the big <b style="color:#e05050">red</b> block out through the gap at the bottom. Click a block, then click (or arrow-key) where to slide it.</div>
+  <div id="board" class="kl-board"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 ESCAPED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='klotski';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const COLS=4, ROWS=5, CELL=62;
+// Classic "Huarong Dao" — target is a 2x2; exit at bottom middle (cols 1-2)
+const START=[
+  {id:0,x:0,y:0,w:1,h:2,t:'vert'}, {id:1,x:1,y:0,w:2,h:2,t:'target'}, {id:2,x:3,y:0,w:1,h:2,t:'vert'},
+  {id:3,x:0,y:2,w:1,h:2,t:'vert'}, {id:4,x:1,y:2,w:2,h:1,t:'horiz'}, {id:5,x:3,y:2,w:1,h:2,t:'vert'},
+  {id:6,x:1,y:3,w:1,h:1,t:'small'}, {id:7,x:2,y:3,w:1,h:1,t:'small'},
+  {id:8,x:0,y:4,w:1,h:1,t:'small'}, {id:9,x:3,y:4,w:1,h:1,t:'small'}
+];
+let blocks=[], sel=null, moves=0, over=false;
+
+function newGame(){
+  blocks=START.map(b=>({...b})); sel=null; moves=0; over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  const b=window.GH?GH.score.get(GAME,'best'):null;
+  document.getElementById('best').textContent=b?b+' moves':'—';
+  layout(); render();
+}
+function layout(){
+  const board=document.getElementById('board');
+  board.style.width=(COLS*CELL+4)+'px'; board.style.height=(ROWS*CELL+4)+'px';
+}
+function occupancy(except){
+  const g=Array.from({length:ROWS},()=>Array(COLS).fill(-1));
+  for(const b of blocks){ if(b.id===except)continue; for(let y=0;y<b.h;y++)for(let x=0;x<b.w;x++) g[b.y+y][b.x+x]=b.id; }
+  return g;
+}
+function canMove(b,dx,dy){
+  const nx=b.x+dx, ny=b.y+dy;
+  if(nx<0||ny<0||nx+b.w>COLS||ny+b.h>ROWS) return false;
+  const g=occupancy(b.id);
+  for(let y=0;y<b.h;y++)for(let x=0;x<b.w;x++){ if(g[ny+y][nx+x]!==-1) return false; }
+  return true;
+}
+function move(b,dx,dy){
+  if(!canMove(b,dx,dy)) { sfx('error'); return false; }
+  b.x+=dx; b.y+=dy; moves++; sfx('move'); render();
+  if(b.t==='target'&&b.x===1&&b.y===3) win();
+  return true;
+}
+function clickBlock(id){
+  if(over) return;
+  sel = sel===id ? null : id;
+  sfx('select'); render();
+}
+function clickCell(cx,cy){
+  if(over||sel===null) return;
+  const b=blocks.find(bl=>bl.id===sel);
+  // determine direction from block toward clicked empty cell (adjacent step)
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  for(const [dx,dy] of dirs){
+    // clicked cell is just outside the block in direction (dx,dy)?
+    if(cx>=b.x+dx && cx<b.x+b.w+dx && cy>=b.y+dy && cy<b.y+b.h+dy && (cx<b.x||cx>=b.x+b.w||cy<b.y||cy>=b.y+b.h)){
+      move(b,dx,dy); return;
+    }
+  }
+}
+function win(){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best',moves,'low'):{value:moves,isBest:false};
+  document.getElementById('best').textContent=r.value+' moves';
+  document.getElementById('win-sub').textContent='Freed in '+moves+' moves'+(r.isBest?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+function render(){
+  const board=document.getElementById('board'); if(!board)return;
+  board.innerHTML='<div class="kl-exit" style="width:'+(2*CELL-8)+'px"></div>';
+  // clickable empty-cell layer
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const cell=document.createElement('div');
+    cell.style.cssText='position:absolute;left:'+(x*CELL+2)+'px;top:'+(y*CELL+2)+'px;width:'+CELL+'px;height:'+CELL+'px;';
+    cell.onclick=()=>clickCell(x,y);
+    board.appendChild(cell);
+  }
+  for(const b of blocks){
+    const el=document.createElement('div');
+    el.className='kl-block '+b.t+(sel===b.id?' sel':'');
+    el.style.left=(b.x*CELL+4)+'px'; el.style.top=(b.y*CELL+4)+'px';
+    el.style.width=(b.w*CELL-6)+'px'; el.style.height=(b.h*CELL-6)+'px';
+    if(b.t==='target') el.textContent='★';
+    el.onclick=(e)=>{ e.stopPropagation(); clickBlock(b.id); };
+    board.appendChild(el);
+  }
+  document.getElementById('moves').textContent=moves;
+}
+document.addEventListener('keydown',e=>{
+  if(over||sel===null) return;
+  const b=blocks.find(bl=>bl.id===sel); if(!b)return;
+  const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+  if(m[e.key]){ e.preventDefault(); move(b,m[e.key][0],m[e.key][1]); }
+});
+newGame();
+</script>
+</body>
+</html>

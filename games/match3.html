@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gem Match</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.g3-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+.g3-grid{display:grid;gap:4px;background:var(--surface);padding:8px;border-radius:12px;border:2px solid var(--border);touch-action:manipulation;}
+.g3-cell{display:flex;align-items:center;justify-content:center;border-radius:9px;cursor:pointer;transition:transform .1s;font-size:24px;}
+.g3-cell:hover{transform:scale(1.06);}
+.g3-cell.sel{box-shadow:0 0 0 3px var(--accent);transform:scale(1.08);}
+.g3-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">💎 GEM MATCH</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <div class="info-pill">MOVES: <span id="moves">20</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="g3-wrap">
+  <div class="g3-hint">Swap two neighbours to line up <b>3+</b> of the same gem. You have 20 moves!</div>
+  <div id="grid" class="g3-grid"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">⏱ TIME!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='match3';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const N=8, GEMS=['🔴','🟠','🟡','🟢','🔵','🟣'];
+let grid=[], sel=null, score, movesLeft, best, busy=false, over=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  score=0; movesLeft=20; over=false; busy=false; sel=null;
+  document.getElementById('win-overlay').classList.remove('show');
+  do{ grid=Array.from({length:N},()=>Array.from({length:N},()=>0|Math.random()*GEMS.length)); }
+  while(findMatches().size>0 || !hasPossibleMove());
+  updateHud(); render();
+}
+function render(){
+  const g=document.getElementById('grid'); if(!g)return;
+  const cell=Math.floor(Math.min(window.innerWidth-40,440)/N);
+  g.style.gridTemplateColumns=`repeat(${N},${cell}px)`;
+  g.innerHTML='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const d=document.createElement('div');
+    d.className='g3-cell'+(sel&&sel[0]===r&&sel[1]===c?' sel':'');
+    d.style.width=cell+'px'; d.style.height=cell+'px'; d.style.fontSize=(cell*0.6)+'px';
+    d.textContent=grid[r][c]>=0?GEMS[grid[r][c]]:'';
+    d.onclick=()=>click(r,c);
+    g.appendChild(d);
+  }
+  updateHud();
+}
+function click(r,c){
+  if(busy||over) return;
+  if(!sel){ sel=[r,c]; sfx('select'); render(); return; }
+  const [sr,sc]=sel;
+  if(sr===r&&sc===c){ sel=null; render(); return; }
+  if(Math.abs(sr-r)+Math.abs(sc-c)!==1){ sel=[r,c]; sfx('select'); render(); return; }
+  trySwap(sr,sc,r,c);
+}
+function swap(r1,c1,r2,c2){ const t=grid[r1][c1]; grid[r1][c1]=grid[r2][c2]; grid[r2][c2]=t; }
+function trySwap(r1,c1,r2,c2){
+  sel=null; busy=true;
+  swap(r1,c1,r2,c2);
+  if(findMatches().size===0){ swap(r1,c1,r2,c2); sfx('error'); busy=false; render(); return; }
+  movesLeft--; sfx('place');
+  render();
+  setTimeout(resolve,180);
+}
+function findMatches(){
+  const m=new Set();
+  for(let r=0;r<N;r++)for(let c=0;c<N-2;c++){ const v=grid[r][c]; if(v<0)continue; if(grid[r][c+1]===v&&grid[r][c+2]===v){ let k=c; while(k<N&&grid[r][k]===v){m.add(r+','+k);k++;} } }
+  for(let c=0;c<N;c++)for(let r=0;r<N-2;r++){ const v=grid[r][c]; if(v<0)continue; if(grid[r+1][c]===v&&grid[r+2][c]===v){ let k=r; while(k<N&&grid[k][c]===v){m.add(k+','+c);k++;} } }
+  return m;
+}
+function resolve(){
+  const m=findMatches();
+  if(m.size===0){
+    busy=false;
+    if(movesLeft<=0){ return endGame(); }
+    if(!hasPossibleMove()){ reshuffle(); }
+    render(); return;
+  }
+  score+=m.size*10; sfx('pop');
+  m.forEach(k=>{ const [r,c]=k.split(',').map(Number); grid[r][c]=-1; });
+  render();
+  setTimeout(()=>{ collapse(); render(); setTimeout(resolve,170); },160);
+}
+function collapse(){
+  for(let c=0;c<N;c++){
+    let write=N-1;
+    for(let r=N-1;r>=0;r--){ if(grid[r][c]>=0){ grid[write][c]=grid[r][c]; if(write!==r)grid[r][c]=-1; write--; } }
+    for(let r=write;r>=0;r--) grid[r][c]=0|Math.random()*GEMS.length;
+  }
+}
+function hasPossibleMove(){
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(c<N-1){ swap(r,c,r,c+1); if(findMatches().size>0){swap(r,c,r,c+1);return true;} swap(r,c,r,c+1); }
+    if(r<N-1){ swap(r,c,r+1,c); if(findMatches().size>0){swap(r,c,r+1,c);return true;} swap(r,c,r+1,c); }
+  }
+  return false;
+}
+function reshuffle(){ do{ for(let r=0;r<N;r++)for(let c=0;c<N;c++)grid[r][c]=0|Math.random()*GEMS.length; }while(findMatches().size>0||!hasPossibleMove()); }
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('best').textContent=best; document.getElementById('moves').textContent=Math.max(0,movesLeft); }
+function endGame(){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value;
+  updateHud();
+  document.getElementById('win-msg').textContent='⏱ OUT OF MOVES';
+  document.getElementById('win-sub').textContent='Score '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best);
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+window.addEventListener('resize',()=>{ if(grid.length) render(); });
+newGame();
+</script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maze</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.mz-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#maze{background:#0a0a0a;border:2px solid var(--border);border-radius:10px;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);max-width:100%;}
+.mz-dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:6px;}
+.mz-dpad button{font-size:20px;font-family:'Orbitron',monospace;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.mz-dpad button:active{background:rgba(240,192,64,.18);}
+.mz-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🌀 MAZE</span>
+  <div class="h-btns">
+    <select id="size-sel" onchange="newGame()">
+      <option value="11">EASY</option>
+      <option value="17" selected>MEDIUM</option>
+      <option value="25">HARD</option>
+    </select>
+    <div class="info-pill">TIME: <span id="time">0:00</span></div>
+    <div class="info-pill">BEST: <span id="best">—</span></div>
+    <button class="hbtn" onclick="newGame()">NEW MAZE</button>
+  </div>
+</div>
+<div class="mz-wrap">
+  <div class="mz-hint">Reach the ⭐ goal. Use arrow keys / WASD or the pad below.</div>
+  <canvas id="maze" width="520" height="520"></canvas>
+  <div class="mz-dpad">
+    <span></span><button onpointerdown="pd(event,0,-1)">▲</button><span></span>
+    <button onpointerdown="pd(event,-1,0)">◀</button><span></span><button onpointerdown="pd(event,1,0)">▶</button>
+    <span></span><button onpointerdown="pd(event,0,1)">▼</button><span></span>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 ESCAPED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">NEW MAZE</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='maze';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('maze'), ctx=cv.getContext('2d');
+let N=17, cells=[], px=0, py=0, cell=0, over=false, startT=0, timer=null;
+
+function newGame(){
+  N=parseInt(document.getElementById('size-sel').value,10);
+  over=false;
+  document.getElementById('win-overlay').classList.remove('show');
+  generate();
+  px=0; py=0;
+  const b=window.GH?GH.score.get(GAME,'best_'+N):null;
+  document.getElementById('best').textContent=b?fmt(b):'—';
+  startTimer();
+  draw();
+}
+// recursive backtracker; each cell has walls [N,E,S,W]
+function generate(){
+  cells=Array.from({length:N},()=>Array.from({length:N},()=>({walls:[true,true,true,true],v:false})));
+  const st=[[0,0]]; cells[0][0].v=true;
+  const DX=[0,1,0,-1], DY=[-1,0,1,0];
+  while(st.length){
+    const [x,y]=st[st.length-1];
+    const dirs=[0,1,2,3].filter(d=>{const nx=x+DX[d],ny=y+DY[d];return nx>=0&&nx<N&&ny>=0&&ny<N&&!cells[ny][nx].v;});
+    if(!dirs.length){ st.pop(); continue; }
+    const d=dirs[0|Math.random()*dirs.length];
+    const nx=x+DX[d], ny=y+DY[d];
+    cells[y][x].walls[d]=false; cells[ny][nx].walls[(d+2)%4]=false;
+    cells[ny][nx].v=true; st.push([nx,ny]);
+  }
+}
+function move(dx,dy){
+  if(over) return;
+  const d = dy<0?0: dx>0?1: dy>0?2: 3;
+  if(cells[py][px].walls[d]) { sfx('error'); return; }
+  px+=dx; py+=dy; sfx('move'); draw();
+  if(px===N-1 && py===N-1) win();
+}
+function win(){
+  over=true; stopTimer();
+  const t=Date.now()-startT;
+  const r=window.GH?GH.score.best(GAME,'best_'+N,t,'low'):{value:t,isBest:false};
+  document.getElementById('best').textContent=fmt(r.value);
+  document.getElementById('win-sub').textContent='Time '+fmt(t)+(r.isBest?' — NEW BEST! 🎉':' · Best '+fmt(r.value));
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),250);
+}
+function draw(){
+  cell=Math.floor(Math.min(cv.width,cv.height)/N);
+  const size=cell*N, off=(cv.width-size)/2;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  // goal
+  ctx.fillStyle='rgba(64,192,160,.3)'; ctx.fillRect(off+(N-1)*cell,off+(N-1)*cell,cell,cell);
+  ctx.strokeStyle='#888'; ctx.lineWidth=Math.max(2,cell*0.14); ctx.lineCap='round';
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const c=cells[y][x], X=off+x*cell, Y=off+y*cell;
+    ctx.beginPath();
+    if(c.walls[0]){ctx.moveTo(X,Y);ctx.lineTo(X+cell,Y);}
+    if(c.walls[1]){ctx.moveTo(X+cell,Y);ctx.lineTo(X+cell,Y+cell);}
+    if(c.walls[2]){ctx.moveTo(X+cell,Y+cell);ctx.lineTo(X,Y+cell);}
+    if(c.walls[3]){ctx.moveTo(X,Y+cell);ctx.lineTo(X,Y);}
+    ctx.stroke();
+  }
+  // goal star
+  ctx.fillStyle='#40c0a0'; ctx.font=(cell*0.8)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('⭐',off+(N-1)*cell+cell/2,off+(N-1)*cell+cell/2);
+  // player
+  ctx.fillStyle='#f0c040'; ctx.beginPath(); ctx.arc(off+px*cell+cell/2,off+py*cell+cell/2,cell*0.3,0,7); ctx.fill();
+}
+function fmt(ms){const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+function startTimer(){startT=Date.now();stopTimer();timer=setInterval(()=>{document.getElementById('time').textContent=fmt(Date.now()-startT);},500);}
+function stopTimer(){if(timer){clearInterval(timer);timer=null;}}
+function pd(e,dx,dy){ e.preventDefault(); move(dx,dy); }
+document.addEventListener('keydown',e=>{
+  const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+  if(m[e.key]){ e.preventDefault(); move(m[e.key][0],m[e.key][1]); }
+});
+// swipe
+let tsx=0,tsy=0;
+cv.addEventListener('touchstart',e=>{tsx=e.touches[0].clientX;tsy=e.touches[0].clientY;},{passive:true});
+cv.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tsx,dy=e.changedTouches[0].clientY-tsy;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<20)return;
+  if(Math.abs(dx)>Math.abs(dy))move(dx>0?1:-1,0);else move(0,dy>0?1:-1);},{passive:true});
+window.addEventListener('resize',()=>{ if(cells.length) draw(); });
+newGame();
+</script>
+</body>
+</html>

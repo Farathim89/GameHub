@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Centipede</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ce-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#centipede{background:#060a06;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.ce-ctrls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.ce-ctrls button{font-size:18px;width:60px;height:48px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.ce-ctrls button:active{background:rgba(64,192,160,.2);}
+.ce-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🐛 CENTIPEDE</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <div class="info-pill">LIVES: <span id="lives">3</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ce-wrap">
+  <div class="ce-hint">Move: <b>← → ↑ ↓ / WASD</b> · Fire: <b>Space</b>. Shoot the centipede — each hit splits it!</div>
+  <canvas id="centipede" width="440" height="520"></canvas>
+  <div class="ce-ctrls">
+    <button onpointerdown="hold('l',1)" onpointerup="hold('l',0)" onpointerleave="hold('l',0)">◀</button>
+    <button onpointerdown="hold('u',1)" onpointerup="hold('u',0)" onpointerleave="hold('u',0)">▲</button>
+    <button onpointerdown="hold('d',1)" onpointerup="hold('d',0)" onpointerleave="hold('d',0)">▼</button>
+    <button onpointerdown="hold('r',1)" onpointerup="hold('r',0)" onpointerleave="hold('r',0)">▶</button>
+    <button onpointerdown="shoot()">🔫</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='centipede';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('centipede'), ctx=cv.getContext('2d');
+const CELL=20, COLS=cv.width/CELL, ROWS=cv.height/CELL;
+let shrooms, segs, bullets, player, score, best, lives, over, raf, tick, L,R,U,D, lastShot, wave;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){ score=0; lives=3; wave=1; over=false; L=R=U=D=false; lastShot=0;
+  shrooms=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  for(let i=0;i<24;i++){ const r=1+(0|Math.random()*(ROWS-6)), c=0|Math.random()*COLS; shrooms[r][c]=3; }
+  player={c:(COLS/2)|0, r:ROWS-1}; bullets=[];
+  spawnCentipede();
+  document.getElementById('best').textContent=best; updateHud();
+  tick=0; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+}
+function spawnCentipede(){ segs=[]; const len=8+wave; for(let i=0;i<len;i++) segs.push({c:(COLS-1)-i, r:0, dir:-1, dropTo:-1}); }
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  tick++;
+  // player movement (continuous-ish, grid snapped)
+  if(tick%3===0){
+    if(L&&player.c>0)player.c--; if(R&&player.c<COLS-1)player.c++;
+    if(U&&player.r>ROWS-6)player.r--; if(D&&player.r<ROWS-1)player.r++;
+  }
+  // bullets
+  if(tick%1===0){ bullets.forEach(b=>b.r-=0.6); bullets=bullets.filter(b=>b.r>-1); }
+  for(const b of bullets){ const br=Math.round(b.r), bc=b.c;
+    if(br>=0&&br<ROWS&&shrooms[br][bc]>0){ shrooms[br][bc]--; b.dead=true; score+=1; if(shrooms[br][bc]===0)score+=5; continue; }
+    for(const s of segs){ if(!s.dead&&s.c===bc&&Math.round(s.r)===br){ s.dead=true; b.dead=true; score+=10; shrooms[br][bc]=3; sfx('hit'); break; } }
+  }
+  segs=segs.filter(s=>!s.dead); bullets=bullets.filter(b=>!b.dead);
+  // centipede movement
+  if(tick%Math.max(4,10-wave)===0){
+    for(const s of segs){
+      if(s.dropTo>=0){ s.r=s.dropTo; s.dropTo=-1; s.dir*=-1; continue; }
+      const nc=s.c+s.dir;
+      if(nc<0||nc>=COLS||shrooms[s.r][nc]>0){ s.dropTo=s.r+1; }
+      else s.c=nc;
+      if(s.r>=ROWS-1){ s.r=ROWS-1; } // reached bottom row -> stays, dangerous
+      // collision with player
+      if(s.c===player.c&&s.r===player.r){ return die(); }
+    }
+  }
+  // per-frame collision with player
+  for(const s of segs){ if(s.c===player.c && Math.round(s.r)===player.r){ return die(); } }
+  updateHud();
+  if(!segs.length){ wave++; score+=50; spawnCentipede(); }
+}
+function die(){ lives--; sfx('lose'); if(lives<=0) return gameOver(); player={c:(COLS/2)|0,r:ROWS-1}; }
+function shoot(){ if(over)return; const now=performance.now(); if(now-lastShot<180)return; lastShot=now; bullets.push({c:player.c,r:player.r-1}); sfx('select'); }
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ if(shrooms[r][c]>0){ ctx.fillStyle=['','#5a3a2a','#8a5a3a','#40c060'][shrooms[r][c]]; ctx.beginPath(); ctx.arc(c*CELL+CELL/2,r*CELL+CELL/2,CELL*0.4,0,7); ctx.fill(); } }
+  ctx.fillStyle='#e0e060'; for(const b of bullets){ ctx.fillRect(b.c*CELL+CELL/2-1.5, b.r*CELL, 3, CELL*0.7); }
+  segs.forEach((s,i)=>{ ctx.fillStyle=i===0?'#f05050':'#40c080'; ctx.beginPath(); ctx.arc(s.c*CELL+CELL/2,s.r*CELL+CELL/2,CELL*0.45,0,7); ctx.fill(); ctx.fillStyle='#fff'; ctx.fillRect(s.c*CELL+CELL/2-2,s.r*CELL+CELL/2-3,4,2); });
+  ctx.fillStyle='#50d0f0'; ctx.beginPath(); const px=player.c*CELL+CELL/2, py=player.r*CELL+CELL/2; ctx.moveTo(px,py-CELL*0.4); ctx.lineTo(px+CELL*0.4,py+CELL*0.4); ctx.lineTo(px-CELL*0.4,py+CELL*0.4); ctx.closePath(); ctx.fill();
+}
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('best').textContent=best; document.getElementById('lives').textContent=lives; }
+function gameOver(){ over=true; const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Score '+score+' · wave '+wave+(r.isBest&&score>0?' — NEW BEST! 🎉':''); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+function hold(k,v){ v=!!v; if(k==='l')L=v;else if(k==='r')R=v;else if(k==='u')U=v;else if(k==='d')D=v; }
+document.addEventListener('keydown',e=>{ const k=e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a'){L=true;e.preventDefault();} if(k==='arrowright'||k==='d'){R=true;e.preventDefault();}
+  if(k==='arrowup'||k==='w'){U=true;e.preventDefault();} if(k==='arrowdown'||k==='s'){D=true;e.preventDefault();}
+  if(k===' '){shoot();e.preventDefault();} });
+document.addEventListener('keyup',e=>{ const k=e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a')L=false; if(k==='arrowright'||k==='d')R=false; if(k==='arrowup'||k==='w')U=false; if(k==='arrowdown'||k==='s')D=false; });
+newGame();
+</script>
+</body>
+</html>

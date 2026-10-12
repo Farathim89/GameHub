@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mexico</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.mx-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:20px 12px;}
+.mx-sides{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;}
+.mx-side{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.mx-lbl{font-family:'Orbitron',monospace;font-size:13px;letter-spacing:2px;}
+.mx-lives{font-size:22px;letter-spacing:4px;}
+.mx-dice{display:flex;gap:10px;}
+.die{width:60px;height:60px;border-radius:14px;background:#f5f0e4;border:2px solid #333;position:relative;box-shadow:1px 2px 5px rgba(0,0,0,.4);}
+.pip{position:absolute;width:12px;height:12px;border-radius:50%;background:#111;}
+.mx-roll{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;padding:14px 32px;border-radius:10px;border:3px solid var(--accent);color:var(--accent);background:var(--surface);cursor:pointer;letter-spacing:2px;}
+.mx-roll:disabled{opacity:.4;cursor:default;}
+.mx-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;letter-spacing:1px;text-align:center;}
+.mx-hint{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);text-align:center;max-width:420px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0a040">🎲 MEXICO</span>
+  <div class="h-btns"><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="mx-wrap">
+  <div class="mx-sides">
+    <div class="mx-side"><div class="mx-lbl" style="color:#f0c040">YOU</div><div class="mx-lives" id="l0">❤️❤️❤️</div><div class="mx-dice" id="d0"></div></div>
+    <div class="mx-side"><div class="mx-lbl" style="color:#5090e0">AI</div><div class="mx-lives" id="l1">❤️❤️❤️</div><div class="mx-dice" id="d1"></div></div>
+  </div>
+  <div class="mx-msg" id="msg">Roll to play!</div>
+  <button class="mx-roll" id="rollBtn" onclick="play()">🎲 ROLL</button>
+  <div class="mx-hint">Two dice make a score. <b>2-1 = Mexico</b> (best). Doubles beat everything except Mexico. Otherwise big die = tens. Lowest roll loses a heart — last standing wins.</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='mexico';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const PIPS={1:[[1,1]],2:[[0,0],[2,2]],3:[[0,0],[1,1],[2,2]],4:[[0,0],[0,2],[2,0],[2,2]],5:[[0,0],[0,2],[1,1],[2,0],[2,2]],6:[[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]]};
+let lives=[3,3], over=false, busy=false;
+function newGame(){ lives=[3,3]; over=false; busy=false; document.getElementById('win-overlay').classList.remove('show'); drawDice('d0',[1,1]); drawDice('d1',[1,1]); updateLives(); setMsg('Roll to play!'); document.getElementById('rollBtn').disabled=false; }
+function score(d){ const [a,b]=d.slice().sort((x,y)=>y-x); if(a===2&&b===1)return 1000; if(a===b)return 100+a; return a*10+b; }
+function roll(){ return [1+(0|Math.random()*6),1+(0|Math.random()*6)]; }
+function play(){ if(over||busy)return; busy=true; document.getElementById('rollBtn').disabled=true;
+  const you=roll(), ai=roll(); drawDice('d0',you); drawDice('d1',ai); sfx('select');
+  const sy=score(you), sa=score(ai);
+  setTimeout(()=>{ let m;
+    if(sy>sa){ lives[1]--; m='You roll '+name(you)+' vs '+name(ai)+' — AI loses a heart!'; sfx('win'); }
+    else if(sa>sy){ lives[0]--; m='AI rolls '+name(ai)+' vs '+name(you)+' — you lose a heart!'; sfx('lose'); }
+    else { m='Tie ('+name(you)+')! Roll again.'; }
+    setMsg(m); updateLives();
+    if(lives[0]<=0||lives[1]<=0) return finish();
+    busy=false; document.getElementById('rollBtn').disabled=false;
+  }, 500);
+}
+function name(d){ const [a,b]=d.slice().sort((x,y)=>y-x); if(a===2&&b===1)return 'MEXICO!'; if(a===b)return 'double '+a+'s'; return a+''+b; }
+function drawDice(id,d){ const el=document.getElementById(id); el.innerHTML=''; d.forEach(v=>{ const die=document.createElement('div'); die.className='die'; PIPS[v].forEach(([r,c])=>{const p=document.createElement('div');p.className='pip';p.style.left=(9+c*19)+'px';p.style.top=(9+r*19)+'px';die.appendChild(p);}); el.appendChild(die); }); }
+function updateLives(){ document.getElementById('l0').textContent='❤️'.repeat(Math.max(0,lives[0]))||'💀'; document.getElementById('l1').textContent='❤️'.repeat(Math.max(0,lives[1]))||'💀'; }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function finish(){ over=true; busy=false; const youWin=lives[0]>0; if(youWin&&window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-msg').textContent=youWin?'🏆 YOU WIN!':'🤖 AI WINS!'; document.getElementById('win-sub').textContent=youWin?'The AI ran out of hearts!':'You ran out of hearts.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

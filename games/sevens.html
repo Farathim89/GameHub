@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sevens</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.sv-wrap{display:flex;flex-direction:column;gap:12px;padding:12px;max-width:820px;margin:0 auto;}
+.sv-ai{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;font-family:'Orbitron',monospace;font-size:12px;}
+.sv-ai span{padding:5px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--border);}
+.sv-ai span.turn{border-color:var(--accent);color:var(--accent);}
+.sv-board{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;}
+.sv-row{display:flex;align-items:center;gap:4px;}
+.sv-slbl{width:24px;font-family:'Orbitron',monospace;font-size:18px;}
+.card{width:40px;height:56px;font-size:14px;} .card .ctop{padding:2px 3px;}
+.sv-hand{display:flex;gap:4px;flex-wrap:wrap;}
+.sv-hand .card{width:48px;height:68px;font-size:16px;cursor:pointer;}
+.sv-hand .card.play{box-shadow:0 0 0 2px var(--green);} .sv-hand .card.dim{opacity:.4;}
+.sv-msg{font-family:'Orbitron',monospace;font-size:13px;min-height:20px;text-align:center;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">7️⃣ SEVENS</span>
+  <div class="h-btns"><button class="hbtn" onclick="pass()">PASS</button><button class="hbtn" onclick="newGame()">NEW GAME</button></div>
+</div>
+<div class="sv-wrap">
+  <div class="sv-ai" id="ai"></div>
+  <div class="sv-board" id="board"></div>
+  <div class="sv-msg" id="msg"></div>
+  <div style="font-family:Orbitron;font-size:11px;color:var(--dim);letter-spacing:2px">🟡 YOUR HAND</div>
+  <div class="sv-hand" id="hand"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='sevens';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let hands=[[],[],[],[]], board=[], turn=0, over=false, busy=false, passes=0;
+// board[suit] = {low, high} range of ranks played (7 index=6). null if 7 not played.
+function newGame(){ let deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r}); shuffle(deck);
+  hands=[[],[],[],[]]; let p=0; while(deck.length){ hands[p].push(deck.pop()); p=(p+1)%4; }
+  board=[null,null,null,null]; over=false; busy=false; passes=0;
+  // player with 7 of diamonds (s=2,r=6) starts
+  turn=hands.findIndex(h=>h.some(c=>c.s===2&&c.r===6));
+  document.getElementById('win-overlay').classList.remove('show');
+  setMsg(turn===0?'You start — play the 7♦.':'Player '+(turn+1)+' starts.');
+  render(); document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*30)+'ms';}); if(turn!==0){ busy=true; setTimeout(aiTurn,700); } }
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function playable(card){ const b=board[card.s]; if(b===null) return card.r===6; return card.r===b.low-1 || card.r===b.high+1; }
+function handPlayable(h){ return h.some(playable); }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function cardHTML(card,cls){ const red=card.s===1||card.s===2; return `<div class="card ${red?'red':'black'} ${cls||''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`; }
+function render(){
+  const ai=document.getElementById('ai'); ai.innerHTML=[1,2,3].map(i=>`<span class="${turn===i&&!over?'turn':''}">🤖 P${i+1}: ${hands[i].length}</span>`).join('');
+  const b=document.getElementById('board'); b.innerHTML='';
+  for(let s=0;s<4;s++){ const row=document.createElement('div'); row.className='sv-row'; row.innerHTML='<div class="sv-slbl" style="color:'+(s===1||s===2?'#e05050':'#ccc')+'">'+SUITS[s]+'</div>';
+    const rg=board[s]; if(rg){ for(let r=rg.low;r<=rg.high;r++) row.innerHTML+=cardHTML({s,r}); } else row.innerHTML+='<span style="color:var(--dim);font-size:11px">— play the 7 —</span>';
+    b.appendChild(row);
+  }
+  const h=document.getElementById('hand'); h.innerHTML=''; const myTurn=turn===0&&!over&&!busy;
+  hands[0].sort((a,b)=>a.s-b.s||a.r-b.r).forEach((card,i)=>{ const pl=myTurn&&playable(card); const div=document.createElement('div'); div.innerHTML=cardHTML(card, pl?'play':(myTurn?'dim':'')); const el=div.firstChild; if(pl)el.onclick=(ev)=>playCard(card,ev.currentTarget); h.appendChild(el); });
+}
+function playCard(card,srcEl){ if(turn!==0||over||!playable(card))return; doPlay(0,card,srcEl); }
+function doPlay(p,card,srcEl){ const b=board[card.s]; if(b===null)board[card.s]={low:6,high:6}; else if(card.r<b.low)b.low=card.r; else b.high=card.r;
+  let srcRect=null; if(p===0&&srcEl)srcRect=srcEl.getBoundingClientRect(); else { const ae=document.getElementById('ai'); if(ae)srcRect=ae.getBoundingClientRect(); }
+  hands[p]=hands[p].filter(c=>!(c.s===card.s&&c.r===card.r)); sfx('place'); passes=0;
+  render();
+  if(srcRect&&window.GH){ const dest=document.getElementById('board').children[card.s]; if(dest)GH.slide(srcRect,dest,{html:cardHTML(card),bg:'transparent'}); }
+  if(hands[p].length===0) return finish(p);
+  turn=(turn+1)%4; advance();
+}
+function pass(){ if(turn!==0||over||busy)return; if(handPlayable(hands[0])){ setMsg('You have a playable card — you must play it.'); return; } passes++; sfx('flip'); turn=(turn+1)%4; advance(); }
+function advance(){ render(); if(over)return;
+  if(passes>=4){ return stuck(); }
+  if(turn===0){ setMsg(handPlayable(hands[0])?'Your turn — play a card.':'No playable card — press PASS.'); }
+  else { busy=true; setMsg('🤖 Player '+(turn+1)+' is thinking…'); setTimeout(aiTurn,650); }
+}
+function aiTurn(){ if(over)return; const h=hands[turn]; const opts=h.filter(playable);
+  busy=false;
+  if(!opts.length){ passes++; setMsg('Player '+(turn+1)+' passes.'); turn=(turn+1)%4; return advance(); }
+  // AI: prefer playing cards far from 7 (to open options)? Simple: play a random playable, prefer non-7 to keep 7s... just play random
+  const card=opts[0|Math.random()*opts.length]; setMsg('Player '+(turn+1)+' played '+RANKS[card.r]+SUITS[card.s]); doPlay(turn,card);
+}
+function finish(p){ over=true; busy=false; render(); if(p===0&&window.GH)GH.score.inc(GAME,'wins',1); document.getElementById('win-msg').textContent=p===0?'🏆 YOU WIN!':'🤖 PLAYER '+(p+1)+' WINS!'; document.getElementById('win-sub').textContent='Emptied the hand first!'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+function stuck(){ over=true; busy=false; const counts=hands.map(h=>h.length); const min=Math.min(...counts); const w=counts.indexOf(min); document.getElementById('win-msg').textContent=w===0?'🏆 YOU WIN!':'🤖 PLAYER '+(w+1)+' WINS!'; document.getElementById('win-sub').textContent='Everyone passed — fewest cards wins ('+min+').'; if(w===0&&window.GH)GH.score.inc(GAME,'wins',1); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),400); }
+newGame();
+</script>
+</body>
+</html>

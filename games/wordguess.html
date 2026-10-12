@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Word Guess</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.wg-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 10px;}
+.wg-board{display:flex;flex-direction:column;gap:6px;}
+.wg-row{display:flex;gap:6px;}
+.wg-tile{width:52px;height:52px;border:2px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'Orbitron',monospace;font-weight:900;font-size:26px;text-transform:uppercase;transition:background .2s,border-color .2s;}
+.wg-tile.filled{border-color:#666;}
+.wg-tile.g{background:#40a060;border-color:#40a060;color:#fff;}
+.wg-tile.y{background:#d0a030;border-color:#d0a030;color:#fff;}
+.wg-tile.b{background:#3a3a44;border-color:#3a3a44;color:#fff;}
+.wg-keys{display:flex;flex-direction:column;gap:5px;align-items:center;max-width:500px;}
+.wg-krow{display:flex;gap:4px;}
+.wg-key{font-family:'Orbitron',monospace;font-weight:700;font-size:13px;padding:11px 9px;min-width:30px;border-radius:5px;border:none;background:#565a66;color:#fff;cursor:pointer;}
+.wg-key.wide{min-width:54px;font-size:11px;}
+.wg-key.g{background:#40a060;} .wg-key.y{background:#d0a030;} .wg-key.b{background:#2a2a32;}
+.wg-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🔤 WORD GUESS</span>
+  <div class="h-btns"><div class="info-pill">WON: <span id="wins">0</span></div><div class="info-pill">STREAK: <span id="streak">0</span></div><button class="hbtn" onclick="newGame()">NEW WORD</button></div>
+</div>
+<div class="wg-wrap">
+  <div class="wg-msg" id="msg">Guess the 5-letter word!</div>
+  <div class="wg-board" id="board"></div>
+  <div class="wg-keys" id="keys"></div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 SOLVED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">NEXT WORD</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='wordguess';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const WORDS="ABOUT ABOVE ACTOR ACUTE ADMIT ADOPT ADULT AGENT AGREE AHEAD ALARM ALBUM ALERT ALIKE ALIVE ALLOW ALONE ALONG ALOUD ALPHA ALTER AMBER ANGEL ANGER ANGLE ANGRY APART APPLE APPLY ARENA ARGUE ARISE ARRAY ARROW ASIDE ASSET AUDIO AUDIT AVOID AWAKE AWARD AWARE BACON BADGE BAKER BASIC BASIS BEACH BEARD BEAST BEGAN BEGIN BEING BELOW BENCH BERRY BIRTH BLACK BLADE BLAME BLANK BLAST BLAZE BLEND BLESS BLIND BLOCK BLOOM BOARD BOAST BONUS BOOST BOUND BRAIN BRAND BRAVE BREAD BREAK BREED BRICK BRIDE BRIEF BRING BROAD BROWN BRUSH BUILD BUNCH BURST CABIN CABLE CAMEL CANDY CARGO CARRY CATCH CAUSE CHAIN CHAIR CHALK CHAOS CHARM CHART CHASE CHEAP CHEAT CHECK CHESS CHEST CHIEF CHILD CHILL CHINA CHOIR CHORD CHOSE CIVIC CLAIM CLASH CLASS CLEAN CLEAR CLICK CLIFF CLIMB CLOCK CLOSE CLOTH CLOUD CLOWN COACH COAST COLOR COMET CORAL COUCH COUGH COULD COUNT COURT COVER CRACK CRAFT CRANE CRASH CRAZY CREAM CREEK CRIME CRISP CROSS CROWD CROWN CRUEL CRUSH CURVE CYCLE DAILY DAIRY DANCE DEALT DEATH DEBUT DECAY DELAY DEPTH DEVIL DIARY DITCH DIZZY DODGE DOING DONOR DOUBT DOZEN DRAFT DRAIN DRAMA DRANK DRAWN DREAM DRESS DRIED DRIFT DRILL DRINK DRIVE DRONE DROVE DRUNK DRYER EAGER EAGLE EARLY EARTH EIGHT ELBOW ELDER ELECT ELITE EMPTY ENEMY ENJOY ENTER ENTRY EQUAL ERROR ESSAY EVENT EVERY EXACT EXILE EXIST EXTRA FABLE FAITH FALSE FANCY FATAL FAULT FAVOR FEAST FENCE FERRY FEVER FIBER FIELD FIFTH FIFTY FIGHT FINAL FINCH FIRST FLAME FLASH FLEET FLESH FLOAT FLOCK FLOOD FLOOR FLOUR FLUID FLUSH FOCUS FORCE FORGE FORTY FORUM FOUND FRAME FRANK FRAUD FRESH FRONT FROST FRUIT FUNNY GAMER GATE GHOST GIANT GLADE GLASS GLEAM GLIDE GLOBE GLORY GLOVE GRACE GRADE GRAIN GRAND GRANT GRAPE GRAPH GRASP GRASS GRAVE GREAT GREED GREEN GREET GRIEF GRILL GRIND GROAN GROUP GROVE GROWL GUARD GUESS GUEST GUIDE GUILD HABIT HAPPY HARSH HASTE HATCH HEART HEAVY HEDGE HELLO HENCE HOBBY HONEY HONOR HORSE HOTEL HOUSE HUMAN HUMOR HURRY ICING IDEAL IDIOM IMAGE INDEX INNER INPUT IRONY ISSUE IVORY JELLY JEWEL JOINT JOKER JUDGE JUICE KNEEL KNIFE KNOCK KNOWN LABEL LABOR LARGE LASER LATER LAUGH LAYER LEARN LEASE LEAST LEAVE LEGAL LEMON LEVEL LIGHT LIMIT LINEN LIVER LLAMA LOBBY LOCAL LOGIC LOOSE LORRY LOVER LOWER LOYAL LUCKY LUNAR LUNCH LYRIC MACRO MAGIC MAJOR MAKER MANGO MAPLE MARCH MARSH MATCH MAYBE MAYOR MEANT MEDAL MELON MERCY MERGE MERIT METAL METER MIGHT MINOR MINUS MIXED MODEL MONEY MONTH MORAL MOTOR MOUNT MOUSE MOUTH MOVIE MUSIC NAVAL NEEDY NERVE NEVER NEWLY NIGHT NINJA NOBLE NOISE NORTH NOVEL NURSE OCCUR OCEAN OFFER OFTEN OLIVE ONION OPERA ORBIT ORDER organ OTHER OUGHT OUNCE OUTER OWNER PAINT PANEL PAPER PARTY PASTA PATCH PAUSE PEACE PEACH PEARL PEDAL PENNY PHASE PHONE PHOTO PIANO PILOT PINCH PITCH PIXEL PIZZA PLACE PLAIN PLANE PLANT PLATE PLAZA PLEAD PLUMB POINT POLAR POUND POWER PRESS PRICE PRIDE PRIME PRINT PRIOR PRIZE PROBE PROOF PROSE PROUD PROVE PROXY PULSE PUPIL PURSE QUEEN QUERY QUEST QUICK QUIET QUILT QUITE QUOTE RADAR RADIO RAISE RALLY RANCH RANGE RAPID RATIO REACH REACT READY REALM REBEL REFER RELAX REPLY RHYME RIDGE RIGHT RINSE RIVAL RIVER ROAST ROBIN ROBOT ROCKY ROUGH ROUND ROUTE ROYAL RUGBY RULER RURAL SADLY SAINT SALAD SANDY SATIN SAUCE SCALE SCARF SCENE SCENT SCOPE SCORE SCOUT SCREW SEIZE SENSE SERVE SEVEN SHADE SHAKE SHALL SHAME SHAPE SHARE SHARK SHARP SHEEP SHEET SHELF SHELL SHIFT SHINE SHINY SHIRT SHOCK SHOOT SHORE SHORT SHOUT SHOWN SIDED SIGHT SILLY SINCE SIXTH SIXTY SIZED SKATE SKILL SKIRT SLACK SLATE SLEEP SLICE SLIDE SLIME SLOPE SMALL SMART SMELL SMILE SMOKE SNACK SNAKE SNEAK SNOWY SOLAR SOLID SOLVE SONIC SORRY SOUND SOUTH SPACE SPARE SPARK SPEAK SPEED SPELL SPEND SPICE SPIKE SPILL SPINE SPLIT SPOKE SPOON SPORT SPRAY SQUAD STACK STAFF STAGE STAIN STAIR STAKE STALE STAMP STAND STARK START STATE STEAK STEAL STEAM STEEL STEEP STEER STERN STICK STIFF STILL STING STOCK STONE STOOD STOOL STORE STORM STORY STOUT STOVE STRAP STRAW STRAY STRIP STUCK STUDY STUFF STYLE SUGAR SUITE SUNNY SUPER SURGE SWEAT SWEEP SWEET SWELL SWIFT SWING SWORD SYRUP TABLE TAKEN TALLY TARGET TASTE TEACH TEARY TEMPO TENTH THANK THEFT THEIR THEME THERE THESE THICK THIEF THING THINK THIRD THORN THOSE THREE THROW THUMB TIGER TIGHT TIMER TITLE TOAST TODAY TOKEN TOPIC TORCH TOTAL TOUCH TOUGH TOWER TOXIC TRACE TRACK TRADE TRAIL TRAIN TRAIT TRASH TREAT TREND TRIAL TRIBE TRICK TRIED TROOP TRUCK TRULY TRUNK TRUST TRUTH TULIP TUTOR TWICE TWINS TWIST ULTRA UNCLE UNDER UNION UNITE UNITY UNTIL UPPER UPSET URBAN USAGE USUAL VALID VALUE VALVE VAPOR VAULT VENUE VERSE VIDEO VIGOR VILLA VINYL VIRAL VIRUS VISIT VITAL VIVID VOCAL VODKA VOICE VOTER WAGON WAIST WAKEN WALTZ WASTE WATCH WATER WAVE WEARY WEAVE WEDGE WEIRD WHALE WHEAT WHEEL WHERE WHICH WHILE WHITE WHOLE WHOSE WIDEN WIDTH WOMAN WORLD WORRY WORSE WORST WORTH WOULD WOUND WOVEN WRIST WRONG WROTE YACHT YEARLY YEAST YIELD YOUNG YOUTH ZEBRA".split(/\s+/).map(w=>w.toUpperCase()).filter(w=>w.length===5);
+const ROWS=6, LEN=5;
+let answer='', guesses=[], cur='', row=0, over=false, keyState={};
+function newGame(){ answer=WORDS[0|Math.random()*WORDS.length]; guesses=[]; cur=''; row=0; over=false; keyState={};
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('wins').textContent=(window.GH?GH.score.get(GAME,'wins'):0)||0; document.getElementById('streak').textContent=(window.GH?GH.score.get(GAME,'streak'):0)||0;
+  setMsg('Guess the 5-letter word!'); buildKeys(); render(); }
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function render(){
+  const b=document.getElementById('board'); b.innerHTML='';
+  for(let r=0;r<ROWS;r++){ const rowEl=document.createElement('div'); rowEl.className='wg-row';
+    const g=guesses[r]; const text=r===row?cur:(g?g.word:'');
+    for(let i=0;i<LEN;i++){ const t=document.createElement('div'); t.className='wg-tile';
+      if(g){ t.classList.add(g.marks[i]); t.textContent=g.word[i]; }
+      else if(r===row&&i<cur.length){ t.classList.add('filled'); t.textContent=cur[i]; }
+      rowEl.appendChild(t);
+    }
+    b.appendChild(rowEl);
+  }
+}
+function markGuess(word){
+  const marks=Array(LEN).fill('b'); const ans=answer.split('');
+  for(let i=0;i<LEN;i++){ if(word[i]===ans[i]){ marks[i]='g'; ans[i]=null; } }
+  for(let i=0;i<LEN;i++){ if(marks[i]==='g')continue; const j=ans.indexOf(word[i]); if(j>=0){ marks[i]='y'; ans[j]=null; } }
+  return marks;
+}
+function submit(){
+  if(over||cur.length!==LEN) return;
+  const marks=markGuess(cur); guesses.push({word:cur,marks});
+  for(let i=0;i<LEN;i++){ const k=cur[i]; const pr={b:0,y:1,g:2}; if(!keyState[k]||pr[marks[i]]>pr[keyState[k]]) keyState[k]=marks[i]; }
+  sfx('place');
+  if(cur===answer){ row++; render(); buildKeys(); return win(true); }
+  row++; cur='';
+  if(row>=ROWS){ render(); buildKeys(); return win(false); }
+  render(); buildKeys();
+}
+function typeCh(ch){ if(over||cur.length>=LEN)return; cur+=ch; sfx('select'); render(); }
+function backspace(){ if(over)return; cur=cur.slice(0,-1); render(); }
+function buildKeys(){
+  const rows=['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+  const k=document.getElementById('keys'); k.innerHTML='';
+  rows.forEach((rw,ri)=>{ const el=document.createElement('div'); el.className='wg-krow';
+    if(ri===2){ const en=document.createElement('button'); en.className='wg-key wide'; en.textContent='ENTER'; en.onclick=submit; el.appendChild(en); }
+    for(const ch of rw){ const b=document.createElement('button'); b.className='wg-key'+(keyState[ch]?' '+keyState[ch]:''); b.textContent=ch; b.onclick=()=>typeCh(ch); el.appendChild(b); }
+    if(ri===2){ const bk=document.createElement('button'); bk.className='wg-key wide'; bk.textContent='⌫'; bk.onclick=backspace; el.appendChild(bk); }
+    k.appendChild(el);
+  });
+}
+function win(solved){ over=true;
+  if(solved){ const w=window.GH?GH.score.inc(GAME,'wins',1):0; const s=window.GH?GH.score.inc(GAME,'streak',1):0; document.getElementById('wins').textContent=w; document.getElementById('streak').textContent=s; sfx('win');
+    document.getElementById('win-msg').textContent='🏆 SOLVED!'; document.getElementById('win-sub').textContent='Got it in '+row+' '+(row===1?'guess':'guesses')+'! '+(s>1?'🔥 '+s+' streak':''); }
+  else { if(window.GH)GH.score.set(GAME,'streak',0); document.getElementById('streak').textContent=0; document.getElementById('win-msg').textContent='😞 OUT OF GUESSES'; document.getElementById('win-sub').textContent='The word was '+answer; }
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),350);
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'){submit();} else if(e.key==='Backspace'){backspace();} else { const c=e.key.toUpperCase(); if(c>='A'&&c<='Z'&&c.length===1)typeCh(c); } });
+newGame();
+</script>
+</body>
+</html>

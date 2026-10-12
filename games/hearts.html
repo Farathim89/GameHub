@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Hearts</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ht-wrap{display:flex;flex-direction:column;align-items:center;padding:10px;gap:8px;max-width:860px;margin:0 auto;}
+.ht-scores{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.ht-score{font-family:'Orbitron',monospace;font-size:11px;padding:6px 12px;border-radius:8px;border:2px solid var(--border);background:var(--surface);letter-spacing:1px;}
+.ht-score.active{border-color:var(--accent);color:var(--accent);}
+.ht-table{position:relative;width:min(560px,96vw);height:min(340px,60vw);background:var(--surface);border:2px solid var(--border);border-radius:16px;}
+.trick-card{position:absolute;transition:all .3s;}
+.tc-n{top:8px;left:50%;transform:translateX(-50%);}
+.tc-e{right:10px;top:50%;transform:translateY(-50%);}
+.tc-s{bottom:8px;left:50%;transform:translateX(-50%);}
+.tc-w{left:10px;top:50%;transform:translateY(-50%);}
+.seat-lbl{position:absolute;font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);letter-spacing:1px;}
+.sl-n{top:-18px;left:50%;transform:translateX(-50%);}
+.sl-e{right:-8px;top:50%;transform:translateY(-50%) rotate(90deg);transform-origin:center;}
+.sl-w{left:-8px;top:50%;transform:translateY(-50%) rotate(-90deg);}
+.ht-msg{font-family:'Orbitron',monospace;font-size:13px;color:var(--accent);letter-spacing:1px;min-height:20px;text-align:center;}
+.hand-row{display:flex;justify-content:center;flex-wrap:wrap;gap:0;padding:6px;min-height:100px;}
+.hand-row .card{width:58px;height:84px;font-size:17px;margin-left:-18px;transition:transform .15s;cursor:pointer;}
+.hand-row .card:first-child{margin-left:0;}
+.hand-row .card:hover{transform:translateY(-8px);z-index:10;}
+.hand-row .card.disabled{opacity:.45;cursor:not-allowed;}
+.hand-row .card.picked{transform:translateY(-14px);box-shadow:0 0 0 3px var(--accent),2px 3px 8px rgba(0,0,0,.5);}
+.trick-card .card{width:56px;height:80px;font-size:16px;}
+.pass-btn{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;padding:10px 22px;border-radius:8px;border:2px solid var(--accent);color:var(--accent);background:var(--surface2);cursor:pointer;letter-spacing:1px;}
+.pass-btn:disabled{opacity:.35;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#e05050">💔 HEARTS</span>
+  <div class="h-btns">
+    <div class="info-pill">ROUND: <span id="round-no">1</span></div>
+    <button class="hbtn" onclick="newMatch()">NEW GAME</button>
+  </div>
+</div>
+
+<div class="ht-wrap">
+  <div class="ht-scores" id="scores"></div>
+  <div class="ht-msg" id="msg"></div>
+  <div class="ht-table" id="table">
+    <div class="seat-lbl sl-n">🤖 NORTH</div>
+    <div class="seat-lbl sl-e">🤖 EAST</div>
+    <div class="seat-lbl sl-w">🤖 WEST</div>
+  </div>
+  <button class="pass-btn" id="pass-btn" style="display:none;" onclick="confirmPass()">PASS 3 CARDS ▶</button>
+  <div class="hand-row" id="hand"></div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newMatch()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+// Players: 0=You(S), 1=West, 2=North, 3=East. Play order counterclockwise-agnostic: 0→1→2→3.
+const NAMES=['🟡 YOU','🤖 WEST','🤖 NORTH','🤖 EAST'];
+const SUITS=['♣','♦','♠','♥'],RANKS=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const rv=r=>RANKS.indexOf(r);
+const isHeart=c=>c.s==='♥';
+const isQS=c=>c.s==='♠'&&c.r==='Q';
+const pts=c=>isHeart(c)?1:isQS(c)?13:0;
+
+let hands=[],taken=[],totals=[0,0,0,0],roundNo=1;
+let phase='pass'; // pass | play | done
+let passDir=1;    // 1=left,3=right,2=across,0=hold (rotates)
+let picked=[],trick=[],leader=0,turn=0,heartsBroken=false,firstTrick=true,trickCount=0;
+
+function newMatch(){
+  totals=[0,0,0,0];roundNo=1;passDir=1;
+  document.getElementById('win-overlay').classList.remove('show');
+  newRound();
+}
+
+function newRound(){
+  const deck=[];
+  for(const s of SUITS)for(const r of RANKS)deck.push({s,r});
+  for(let i=deck.length-1;i>0;i--){const j=0|Math.random()*(i+1);[deck[i],deck[j]]=[deck[j],deck[i]];}
+  hands=[[],[],[],[]];
+  deck.forEach((c,i)=>hands[i%4].push(c));
+  hands.forEach(sortHand);
+  taken=[[],[],[],[]];
+  trick=[];picked=[];heartsBroken=false;firstTrick=true;trickCount=0;
+  document.getElementById('round-no').textContent=roundNo;
+
+  if(passDir===0){startPlay();}
+  else{
+    phase='pass';
+    const dirName={1:'LEFT ⬅',2:'ACROSS ⬆',3:'RIGHT ➡'}[passDir];
+    setMsg('SELECT 3 CARDS TO PASS '+dirName);
+    document.getElementById('pass-btn').style.display='';
+    document.getElementById('pass-btn').disabled=true;
+  }
+  render();
+  document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*26)+'ms';});
+}
+
+function sortHand(h){
+  h.sort((a,b)=>SUITS.indexOf(a.s)-SUITS.indexOf(b.s)||rv(a.r)-rv(b.r));
+}
+
+// ── PASSING ──
+function clickCard(i){
+  if(phase==='pass'){
+    const idx=picked.indexOf(i);
+    if(idx>=0)picked.splice(idx,1);
+    else if(picked.length<3)picked.push(i);
+    document.getElementById('pass-btn').disabled=picked.length!==3;
+    render();
+    return;
+  }
+  if(phase!=='play'||turn!==0)return;
+  const card=hands[0][i];
+  if(!legalPlays(0).includes(card))return;
+  playCard(0,card);
+}
+
+function confirmPass(){
+  if(picked.length!==3)return;
+  const passes=[[],[],[],[]];
+  passes[0]=picked.map(i=>hands[0][i]);
+  // AI picks: pass highest cards, prefer dumping Q♠/A♠/K♠ and high hearts
+  for(let p=1;p<4;p++){
+    const h=[...hands[p]];
+    h.sort((a,b)=>aiPassValue(b)-aiPassValue(a));
+    passes[p]=h.slice(0,3);
+  }
+  for(let p=0;p<4;p++){
+    const to=(p+passDir)%4;
+    hands[p]=hands[p].filter(c=>!passes[p].includes(c));
+    hands[to].push(...passes[p]);
+  }
+  hands.forEach(sortHand);
+  picked=[];
+  document.getElementById('pass-btn').style.display='none';
+  startPlay();
+}
+
+function aiPassValue(c){
+  if(isQS(c))return 100;
+  if(c.s==='♠'&&(c.r==='A'||c.r==='K'))return 90;
+  if(isHeart(c))return 40+rv(c.r);
+  return rv(c.r);
+}
+
+function startPlay(){
+  phase='play';
+  // 2♣ leads
+  leader=hands.findIndex(h=>h.some(c=>c.s==='♣'&&c.r==='2'));
+  turn=leader;
+  setMsg(NAMES[leader]+' LEADS WITH 2♣');
+  render();
+  if(turn!==0)setTimeout(aiPlay,700);
+}
+
+function legalPlays(p){
+  const h=hands[p];
+  if(firstTrick&&trick.length===0)return h.filter(c=>c.s==='♣'&&c.r==='2');
+  if(trick.length===0){
+    // can't lead hearts until broken (unless only hearts)
+    const nonH=h.filter(c=>!isHeart(c));
+    return heartsBroken||!nonH.length?h:nonH;
+  }
+  const lead=trick[0].card.s;
+  const follow=h.filter(c=>c.s===lead);
+  if(follow.length)return follow;
+  // first trick: no points may be discarded (unless forced)
+  if(firstTrick){
+    const clean=h.filter(c=>!pts(c));
+    if(clean.length)return clean;
+  }
+  return h;
+}
+
+function playCard(p,card){
+  // capture slide source before the card leaves the hand / before re-render
+  let srcRect=null;
+  if(p===0){ const hv=document.getElementById('hand').children; const idx=hands[0].indexOf(card); if(idx>=0&&hv[idx]) srcRect=hv[idx].getBoundingClientRect(); }
+  else { const se=document.querySelector({1:'.sl-w',2:'.sl-n',3:'.sl-e'}[p]); if(se)srcRect=se.getBoundingClientRect(); }
+  hands[p]=hands[p].filter(c=>c!==card);
+  trick.push({p,card});
+  if(isHeart(card))heartsBroken=true;
+  render();
+  if(srcRect&&window.GH){ const dest=document.querySelector('.trick-card.'+({0:'tc-s',1:'tc-w',2:'tc-n',3:'tc-e'}[p])); if(dest)GH.slide(srcRect,dest,{html:cardHTML(card),bg:'transparent'}); }
+  if(trick.length===4){setTimeout(endTrick,900);}
+  else{
+    turn=(turn+1)%4;
+    if(turn===0)setMsg('YOUR TURN — FOLLOW '+trick[0].card.s);
+    else setTimeout(aiPlay,650);
+    render();
+  }
+}
+
+function endTrick(){
+  const lead=trick[0].card.s;
+  let win=trick[0];
+  for(const t of trick)if(t.card.s===lead&&rv(t.card.r)>rv(win.card.r))win=t;
+  taken[win.p].push(...trick.map(t=>t.card));
+  trick=[];firstTrick=false;trickCount++;
+  leader=win.p;turn=win.p;
+  if(trickCount===13){endRound();return;}
+  setMsg(NAMES[win.p]+' TAKES THE TRICK');
+  render();
+  if(turn!==0)setTimeout(aiPlay,800);
+}
+
+function endRound(){
+  const roundPts=taken.map(cards=>cards.reduce((a,c)=>a+pts(c),0));
+  // shoot the moon
+  const shooter=roundPts.findIndex(x=>x===26);
+  if(shooter>=0){
+    for(let p=0;p<4;p++)totals[p]+=p===shooter?0:26;
+    setMsg(NAMES[shooter]+' SHOT THE MOON! 🌙 +26 to everyone else');
+  } else {
+    for(let p=0;p<4;p++)totals[p]+=roundPts[p];
+  }
+  render();
+  if(Math.max(...totals)>=100){
+    const best=Math.min(...totals);
+    const winner=totals.indexOf(best);
+    document.getElementById('win-msg').textContent=winner===0?'🏆 YOU WIN!':NAMES[winner]+' WINS!';
+    document.getElementById('win-sub').textContent=totals.map((t,i)=>NAMES[i]+': '+t).join('  ·  ');
+    setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),700);
+    phase='done';
+    return;
+  }
+  roundNo++;
+  passDir=(passDir===1)?3:(passDir===3)?2:(passDir===2)?0:1;
+  setTimeout(newRound,1400);
+}
+
+// ── AI ──
+function aiPlay(){
+  if(phase!=='play'||turn===0)return;
+  const p=turn;
+  const legal=legalPlays(p);
+  if(!legal.length)return;
+  let card;
+  if(trick.length===0){
+    // lead: lowest non-dangerous card
+    const safe=legal.filter(c=>!isQS(c));
+    const pool=safe.length?safe:legal;
+    card=pool.reduce((a,b)=>rv(a.r)<=rv(b.r)?a:b);
+  } else {
+    const lead=trick[0].card.s;
+    const following=legal[0].s===lead;
+    const isLast=trick.length===3;
+    const trickPts=trick.reduce((a,t)=>a+pts(t.card),0);
+    if(following){
+      const winCard=trick.filter(t=>t.card.s===lead).reduce((a,t)=>rv(t.card.r)>rv(a.card.r)?t:a,trick[0]);
+      const under=legal.filter(c=>rv(c.r)<rv(winCard.card.r));
+      if(under.length){
+        // duck with highest card that still loses
+        card=under.reduce((a,b)=>rv(a.r)>=rv(b.r)?a:b);
+      } else if(isLast&&trickPts===0){
+        // win a pointless trick with highest
+        card=legal.reduce((a,b)=>rv(a.r)>=rv(b.r)?a:b);
+      } else {
+        // forced to win: play lowest winning card (dump Q♠ never here since following spades handled by rv)
+        card=legal.reduce((a,b)=>rv(a.r)<=rv(b.r)?a:b);
+      }
+    } else {
+      // sluff: dump Q♠ first, then high hearts, then highest card
+      card=legal.find(isQS)
+        ||legal.filter(isHeart).sort((a,b)=>rv(b.r)-rv(a.r))[0]
+        ||legal.reduce((a,b)=>rv(a.r)>=rv(b.r)?a:b);
+    }
+  }
+  playCard(p,card);
+}
+
+// ── RENDER ──
+function setMsg(m){document.getElementById('msg').textContent=m;}
+
+function cardHTML(c,cls=''){
+  const red=c.s==='♥'||c.s==='♦';
+  return `<div class="card ${red?'red':'black'} ${cls}">
+    <div class="ctop"><span class="crank">${c.r}</span><span class="csuit">${c.s}</span></div>
+    <div class="cmid">${c.s}</div>
+    <div class="cbott"><span class="crank">${c.r}</span><span class="csuit">${c.s}</span></div>
+  </div>`;
+}
+
+function render(){
+  // scores
+  const roundPts=taken.map(cards=>cards.reduce((a,c)=>a+pts(c),0));
+  document.getElementById('scores').innerHTML=NAMES.map((n,i)=>
+    `<div class="ht-score${turn===i&&phase==='play'?' active':''}">${n}: ${totals[i]}<span style="color:var(--dim);"> (+${roundPts[i]})</span></div>`
+  ).join('');
+
+  // trick area
+  const posCls={0:'tc-s',1:'tc-w',2:'tc-n',3:'tc-e'};
+  const t=document.getElementById('table');
+  [...t.querySelectorAll('.trick-card')].forEach(e=>e.remove());
+  trick.forEach(({p,card})=>{
+    const d=document.createElement('div');
+    d.className='trick-card '+posCls[p];
+    d.innerHTML=cardHTML(card);
+    t.appendChild(d);
+  });
+
+  // hand
+  const h=document.getElementById('hand');
+  const legal=phase==='play'&&turn===0?legalPlays(0):null;
+  h.innerHTML='';
+  hands[0].forEach((c,i)=>{
+    const w=document.createElement('div');
+    let cls='';
+    if(phase==='pass'&&picked.includes(i))cls='picked';
+    if(legal&&!legal.includes(c))cls='disabled';
+    w.innerHTML=cardHTML(c,cls);
+    const el=w.firstElementChild;
+    el.onclick=()=>clickCard(i);
+    h.appendChild(el);
+  });
+}
+
+newMatch();
+</script>
+</body>
+</html>

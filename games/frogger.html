@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Frogger</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.fr-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#frog{background:#0a0a12;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.fr-dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:6px;}
+.fr-dpad button{font-size:20px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.fr-dpad button:active{background:rgba(64,192,160,.2);}
+.fr-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#34d399">🐸 FROGGER</span>
+  <div class="h-btns">
+    <div class="info-pill">SCORE: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <div class="info-pill">LIVES: <span id="lives">3</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="fr-wrap">
+  <div class="fr-hint">Cross the road and river to the top. Dodge cars 🚗 — ride logs 🪵 over water!</div>
+  <canvas id="frog" width="520" height="480"></canvas>
+  <div class="fr-dpad">
+    <span></span><button onpointerdown="pd(event,0,-1)">▲</button><span></span>
+    <button onpointerdown="pd(event,-1,0)">◀</button><span></span><button onpointerdown="pd(event,1,0)">▶</button>
+    <span></span><button onpointerdown="pd(event,0,1)">▼</button><span></span>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='frogger';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('frog'), ctx=cv.getContext('2d');
+const COLS=13, ROWS=12, CELL=40;
+cv.width=COLS*CELL; cv.height=ROWS*CELL;
+const W=cv.width, H=cv.height;
+// rows (0=top goal) : 0 goal, 1-4 water(logs), 5 safe, 6-9 road(cars), 10 safe, 11 start
+let lanes, frog, score, best, lives, over, raf, onLog, level;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){ score=0; lives=3; level=1; over=false; buildLanes(); resetFrog(); updateHud(); document.getElementById('win-overlay').classList.remove('show'); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop); }
+function buildLanes(){
+  lanes=[];
+  for(let r=0;r<ROWS;r++){
+    if(r>=1&&r<=4){ // water with logs
+      const dir=r%2?1:-1, speed=(0.6+level*0.15)*dir, len=2+(0|Math.random()*2);
+      lanes[r]={type:'water',dir,speed,objs:spawnObjs(len,3,speed)};
+    } else if(r>=6&&r<=9){ // road with cars
+      const dir=r%2?1:-1, speed=(0.9+level*0.2)*dir;
+      lanes[r]={type:'road',dir,speed,objs:spawnObjs(1,3,speed)};
+    } else lanes[r]={type:'safe'};
+  }
+}
+function spawnObjs(len,count,speed){ const objs=[]; const gap=COLS/count; for(let i=0;i<count;i++){ objs.push({x:(i*gap+Math.random())*CELL, len}); } return objs; }
+function resetFrog(){ frog={c:(COLS/2)|0, r:ROWS-1, x:((COLS/2)|0)*CELL, y:(ROWS-1)*CELL}; onLog=null; }
+function loop(){ if(over)return; update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  for(let r=0;r<ROWS;r++){ const ln=lanes[r]; if(!ln.objs)continue; ln.objs.forEach(o=>{ o.x+=ln.speed; const w=o.len*CELL; if(ln.speed>0&&o.x>W)o.x=-w; if(ln.speed<0&&o.x<-w)o.x=W; }); }
+  // if on water, move frog with the log
+  const ln=lanes[frog.r];
+  if(ln.type==='water'){
+    const log=ln.objs.find(o=>frog.x+CELL*0.5>=o.x && frog.x+CELL*0.5<=o.x+o.len*CELL);
+    if(log){ frog.x+=ln.speed; } else { return die('💧 Splash!'); }
+    if(frog.x<-CELL*0.5||frog.x>W-CELL*0.5) return die('🌊 Drifted off!');
+  } else if(ln.type==='road'){
+    for(const o of ln.objs){ if(frog.x+8<o.x+o.len*CELL && frog.x+CELL-8>o.x) return die('🚗 Squished!'); }
+  }
+  if(frog.r===0){ win(); }
+}
+function move(dx,dy){
+  if(over)return;
+  const nc=frog.c+dx, nr=frog.r+dy;
+  if(nc<0||nc>=COLS||nr<0||nr>=ROWS) return;
+  frog.c=nc; frog.r=nr; frog.x=nc*CELL; frog.y=nr*CELL; sfx('move');
+  if(dy<0) { score+=10; updateHud(); }
+}
+function die(reason){ lives--; sfx('lose'); updateHud(); if(lives<=0) return gameOver(reason); resetFrog(); }
+function win(){ score+=100; level++; sfx('win'); updateHud(); buildLanes(); resetFrog(); }
+function gameOver(reason){
+  over=true;
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value;
+  document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent=reason+' · Score '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+function draw(){
+  for(let r=0;r<ROWS;r++){ const ln=lanes[r];
+    ctx.fillStyle = r===0?'#1a5a3a' : ln.type==='water'?'#163a6a' : ln.type==='road'?'#1a1a22' : '#223322';
+    ctx.fillRect(0,r*CELL,W,CELL);
+  }
+  // goal markers
+  ctx.fillStyle='#40c060'; ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🏁',W/2,CELL/2);
+  for(let r=0;r<ROWS;r++){ const ln=lanes[r]; if(!ln.objs)continue;
+    ln.objs.forEach(o=>{ const w=o.len*CELL, y=r*CELL;
+      if(ln.type==='water'){ ctx.fillStyle='#7a5020'; roundRect(o.x+3,y+6,w-6,CELL-12,8); ctx.fill(); }
+      else { ctx.fillStyle=['#e05050','#f0a040','#5090e0'][r%3]; roundRect(o.x+4,y+6,w-8,CELL-12,6); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,.3)'; ctx.fillRect(o.x+8,y+10,w-16,5); }
+    });
+  }
+  // frog
+  ctx.font=(CELL*0.7)+'px serif'; ctx.fillText('🐸',frog.x+CELL/2,frog.y+CELL/2+2);
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('best').textContent=best; document.getElementById('lives').textContent=lives; }
+function pd(e,dx,dy){ e.preventDefault(); move(dx,dy); }
+document.addEventListener('keydown',e=>{ const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]}; if(m[e.key]){e.preventDefault();move(m[e.key][0],m[e.key][1]);} });
+newGame();
+</script>
+</body>
+</html>

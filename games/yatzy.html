@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Yatzy</title>
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<!-- Prevent Chrome auto dark mode from inverting our custom colors -->
+<style>:root{color-scheme:dark;}*{forced-color-adjust:none;}</style>
+<style>
+/* ── LAYOUT ── */
+.yatzy-wrap{
+  display:flex;flex-direction:column;align-items:center;
+  padding:8px 12px 16px;gap:10px;width:100%;max-width:980px;margin:0 auto;
+}
+/* Turn bar always full width */
+.turn-bar{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;width:100%;}
+
+/* Main content: dice left, table right */
+.yatzy-main{
+  display:flex;gap:16px;align-items:flex-start;width:100%;
+  flex-wrap:wrap; /* stacks on narrow screens */
+}
+.yatzy-left{
+  display:flex;flex-direction:column;gap:10px;
+  flex-shrink:0;min-width:240px;
+  /* On desktop: fixed width. On mobile: full width */
+  width:280px;
+}
+@media(max-width:640px){
+  .yatzy-left{width:100%;}
+  .yatzy-main{flex-direction:column;}
+}
+.yatzy-right{flex:1;min-width:0;overflow-x:auto;}
+
+/* ── MODE PICK ── */
+.mode-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:24px;padding:30px;}
+.mode-title{font-family:'Orbitron',monospace;font-size:clamp(24px,5vw,44px);font-weight:900;color:#f0c040;letter-spacing:4px;text-align:center;}
+
+/* ── DICE AREA ── */
+.dice-area{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  background:#1a1a1a;border:2px solid #333;border-radius:12px;
+  padding:14px 16px;width:100%;box-sizing:border-box;
+}
+.dice-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;perspective:560px;}
+
+/* ── 3D CUBE DICE ── */
+.die3d{
+  width:62px;height:62px;position:relative;
+  transform-style:preserve-3d;
+  transition:transform .95s cubic-bezier(.3,.9,.35,1);
+}
+.dface{
+  position:absolute;width:62px;height:62px;box-sizing:border-box;
+  border-radius:10px;border:2px solid #888;
+  background:linear-gradient(145deg,#f7f4e8,#ddd8c4);
+  display:flex;align-items:center;justify-content:center;
+  backface-visibility:hidden;
+}
+.locked-wrap .dface{background:linear-gradient(145deg,#132a50,#0d2040);border-color:#4488ff;}
+.die-wrap{filter:drop-shadow(3px 5px 6px rgba(0,0,0,.55));}
+.die-wrap:hover:not(.locked-wrap){filter:drop-shadow(3px 8px 10px rgba(0,0,0,.7)) brightness(1.06);}
+.dface.f1{transform:rotateY(0deg)   translateZ(31px);}
+.dface.f2{transform:rotateX(90deg)  translateZ(31px);}
+.dface.f3{transform:rotateY(90deg)  translateZ(31px);}
+.dface.f4{transform:rotateY(-90deg) translateZ(31px);}
+.dface.f5{transform:rotateX(-90deg) translateZ(31px);}
+.dface.f6{transform:rotateY(180deg) translateZ(31px);}
+
+/* ── SINGLE DIE ── */
+.die-wrap{
+  perspective:200px;
+  width:62px;height:62px;
+  flex-shrink:0;
+  cursor:pointer;
+  user-select:none;
+}
+.die{
+  width:62px;height:62px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .2s,box-shadow .2s;position:relative;
+  box-shadow:3px 4px 12px rgba(0,0,0,.7);
+  transform-style:preserve-3d;
+  will-change:transform;
+}
+.die-wrap:hover:not(.locked-wrap) .die{
+  transform:translateY(-5px);
+  box-shadow:3px 9px 18px rgba(0,0,0,.8);
+}
+.die-wrap.locked-wrap .die{
+  box-shadow:0 0 16px rgba(68,136,255,.6),3px 4px 10px rgba(0,0,0,.6);
+}
+
+/* 3D tumble animation — spins on both axes */
+@keyframes tumble{
+  0%  {transform:rotateX(0deg)   rotateY(0deg)   rotateZ(0deg);}
+  15% {transform:rotateX(180deg) rotateY(90deg)  rotateZ(45deg);}
+  30% {transform:rotateX(90deg)  rotateY(270deg) rotateZ(180deg);}
+  45% {transform:rotateX(270deg) rotateY(180deg) rotateZ(90deg);}
+  60% {transform:rotateX(180deg) rotateY(360deg) rotateZ(270deg);}
+  75% {transform:rotateX(360deg) rotateY(90deg)  rotateZ(180deg);}
+  90% {transform:rotateX(270deg) rotateY(270deg) rotateZ(45deg);}
+  100%{transform:rotateX(360deg) rotateY(360deg) rotateZ(360deg);}
+}
+.die.rolling{
+  animation:tumble 0.55s cubic-bezier(.4,0,.6,1);
+}
+/* Die pips */
+.die-pips{display:grid;width:46px;height:46px;gap:4px;padding:4px;}
+.pip{width:10px;height:10px;border-radius:50%;background:#1a1a1a;transition:background .2s;box-shadow:inset 0 1px 2px rgba(0,0,0,.4);}
+.die.locked .pip{background:#aaccff;}
+/* Die value number (fallback) */
+.die-num{font-family:'Nunito',sans-serif;font-weight:900;font-size:24px;color:#222;}
+.die.locked .die-num{color:#88bbff;}
+
+/* ── CONTROLS ── */
+.roll-btn{
+  font-family:'Orbitron',monospace;font-size:16px;font-weight:700;
+  padding:12px 32px;border-radius:10px;border:none;cursor:pointer;
+  background:linear-gradient(135deg,#f0c040,#c08820);
+  color:#111;letter-spacing:2px;transition:all .2s;
+  box-shadow:0 4px 12px rgba(240,192,64,.3);
+}
+.roll-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 18px rgba(240,192,64,.4);}
+.roll-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.rolls-left{font-family:'Orbitron',monospace;font-size:12px;color:var(--dim);letter-spacing:2px;}
+.lock-hint{font-family:'Orbitron',monospace;font-size:10px;color:#333;letter-spacing:1px;}
+
+/* ── TURN INDICATOR ── */
+.turn-bar{
+  display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
+  width:100%;max-width:500px;
+}
+.turn-pill{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;padding:8px 20px;border-radius:8px;border:2px solid;letter-spacing:2px;}
+
+/* ── SCORE TABLE ── */
+.score-table-wrap{width:100%;max-width:600px;overflow-x:auto;}
+table.score-table{
+  width:100%;border-collapse:collapse;
+  font-family:'Nunito',sans-serif;font-size:14px;
+}
+.score-table th{
+  font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1px;
+  padding:8px 10px;background:var(--surface2);color:var(--dim);
+  border-bottom:2px solid var(--border);text-align:center;white-space:nowrap;
+}
+.score-table th.cat-col{text-align:left;}
+.score-table td{
+  padding:7px 10px;border-bottom:1px solid var(--border);
+  text-align:center;vertical-align:middle;
+}
+.score-table td.cat-name{
+  text-align:left;font-weight:700;color:var(--text);
+  font-size:13px;white-space:nowrap;
+}
+.score-table td.scored{color:var(--green);font-weight:900;font-size:15px;}
+.score-table td.scored-bad{color:#888;font-size:15px;}
+.score-table td.available{
+  cursor:pointer;color:#5599ff;font-weight:700;
+  transition:all .15s;border-radius:4px;
+}
+.score-table td.available:hover{background:rgba(85,153,255,.15);color:#88ccff;}
+.score-table td.potential{color:#334;font-size:12px;}
+.score-table tr.section-header td{
+  background:var(--surface);font-family:'Orbitron',monospace;
+  font-size:10px;color:var(--dim);letter-spacing:2px;padding:5px 10px;
+  border-top:2px solid var(--border);
+}
+.score-table tr.total-row td{
+  background:var(--surface2);font-family:'Orbitron',monospace;
+  font-weight:700;font-size:13px;border-top:2px solid var(--border);
+}
+.score-table tr.total-row td.cat-name{color:var(--accent);}
+.bonus-row td{color:#f0c040!important;}
+
+/* ── FINAL SCORE ── */
+.final-score{
+  font-family:'Orbitron',monospace;font-size:clamp(18px,4vw,32px);font-weight:900;
+  color:var(--accent);letter-spacing:3px;text-align:center;
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#f0c040">🎲 YATZY</span>
+  <div class="h-btns" id="hdr-btns" style="display:none;">
+    <span class="info-pill" id="mode-label"></span>
+    <button class="hbtn" onclick="showModePick()">NEW GAME</button>
+  </div>
+</div>
+
+<!-- MODE PICK -->
+<div id="mode-pick" class="mode-wrap">
+  <div class="mode-title">🎲 YATZY</div>
+  <div style="display:flex;gap:10px;">
+    <button class="hbtn" id="type-classic" onclick="setType('classic')" style="border-color:var(--accent);color:var(--accent);">🎲 CLASSIC — 5 DICE</button>
+    <button class="hbtn" id="type-maxi" onclick="setType('maxi')">🎰 MAXI — 6 DICE</button>
+  </div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;max-width:380px;line-height:1.7;" id="type-desc">
+    Roll 5 dice up to 3 times per turn.<br>
+    Lock dice to keep them. Score in 13 categories.<br>
+    Bonus +35 at 63 upper points. Highest total wins!
+  </div>
+  <div class="mode-btns">
+    <button class="mbtn blue" onclick="startGame('2p')">👥 2 PLAYERS</button>
+    <button class="mbtn green" onclick="startGame('ai')">🤖 VS AI</button>
+    <button class="mbtn accent" onclick="startGame('solo')">🧠 SOLO</button>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game-area" style="display:none;width:100%;">
+<div class="yatzy-wrap">
+
+  <!-- Turn bar — full width at top -->
+  <div class="turn-bar">
+    <div class="turn-pill" id="turn-pill">🎲 ROLL TO START</div>
+  </div>
+
+  <!-- Main: dice LEFT, score table RIGHT -->
+  <div class="yatzy-main">
+
+    <!-- LEFT: dice + controls -->
+    <div class="yatzy-left">
+      <div class="dice-area">
+        <div class="dice-row" id="dice-row"></div>
+        <div class="rolls-left" id="rolls-left">3 ROLLS REMAINING</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;">
+          <button class="roll-btn" id="roll-btn" onclick="rollDice()">🎲 ROLL DICE</button>
+          <button class="hbtn" onclick="lockAll()" id="lock-all-btn" style="display:none;">🔒 LOCK ALL</button>
+        </div>
+        <div class="lock-hint" id="lock-hint" style="display:none;">CLICK DICE TO LOCK/UNLOCK THEM</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: score table -->
+    <div class="yatzy-right">
+      <div class="score-table-wrap">
+        <table class="score-table" id="score-table"></table>
+      </div>
+    </div>
+
+  </div><!-- /yatzy-main -->
+</div>
+</div>
+
+<!-- WIN OVERLAY -->
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 GAME OVER!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="final-score" id="final-score"></div>
+  <div class="win-btns" style="margin-top:16px;">
+    <button class="win-btn" onclick="startGame(gameMode)">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="showModePick()">CHANGE MODE</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CATEGORIES
+// ═══════════════════════════════════════════════
+const UPPER = [
+  {id:'ones',   name:'Ones',   desc:'Sum of all 1s'},
+  {id:'twos',   name:'Twos',   desc:'Sum of all 2s'},
+  {id:'threes', name:'Threes', desc:'Sum of all 3s'},
+  {id:'fours',  name:'Fours',  desc:'Sum of all 4s'},
+  {id:'fives',  name:'Fives',  desc:'Sum of all 5s'},
+  {id:'sixes',  name:'Sixes',  desc:'Sum of all 6s'},
+];
+const LOWER_CLASSIC = [
+  {id:'three_kind', name:'Three of a Kind', desc:'Sum of all dice'},
+  {id:'four_kind',  name:'Four of a Kind',  desc:'Sum of all dice'},
+  {id:'full_house', name:'Full House',      desc:'25 pts'},
+  {id:'sm_straight',name:'Sm. Straight',   desc:'30 pts (4 in seq)'},
+  {id:'lg_straight',name:'Lg. Straight',   desc:'40 pts (5 in seq)'},
+  {id:'yatzy',      name:'YATZY!',         desc:'50 pts (5 of a kind)'},
+  {id:'chance',     name:'Chance',         desc:'Sum of all dice'},
+];
+const LOWER_MAXI = [
+  {id:'m_pair',   name:'One Pair',        desc:'Sum of highest pair'},
+  {id:'m_2pairs', name:'Two Pairs',       desc:'Sum of two pairs'},
+  {id:'m_3pairs', name:'Three Pairs',     desc:'Sum of three pairs'},
+  {id:'m_3kind',  name:'Three of a Kind', desc:'Sum of the three dice'},
+  {id:'m_4kind',  name:'Four of a Kind',  desc:'Sum of the four dice'},
+  {id:'m_5kind',  name:'Five of a Kind',  desc:'Sum of the five dice'},
+  {id:'m_sstr',   name:'Sm. Straight',    desc:'1-2-3-4-5 = 15 pts'},
+  {id:'m_lstr',   name:'Lg. Straight',    desc:'2-3-4-5-6 = 20 pts'},
+  {id:'m_fstr',   name:'Full Straight',   desc:'1-2-3-4-5-6 = 21 pts'},
+  {id:'m_house',  name:'Full House (3+2)',desc:'Sum of those five dice'},
+  {id:'m_villa',  name:'Villa (3+3)',     desc:'Sum of both triples'},
+  {id:'m_tower',  name:'Tower (4+2)',     desc:'Sum of all six dice used'},
+  {id:'m_chance', name:'Chance',          desc:'Sum of all dice'},
+  {id:'m_maxi',   name:'MAXI YATZY!',     desc:'100 pts (6 of a kind)'},
+];
+let LOWER = LOWER_CLASSIC;
+let ALL_CATS = [...UPPER, ...LOWER];
+
+// ═══════════════════════════════════════════════
+// SCORING FUNCTIONS
+// ═══════════════════════════════════════════════
+function counts(dice){
+  const c={};dice.forEach(d=>c[d]=(c[d]||0)+1);return c;
+}
+function sum(dice){return dice.reduce((a,b)=>a+b,0);}
+
+function calcScore(cat, dice){
+  const c=counts(dice), vals=Object.values(c), s=sum(dice);
+  switch(cat){
+    case 'ones':   return dice.filter(d=>d===1).reduce((a,b)=>a+b,0);
+    case 'twos':   return dice.filter(d=>d===2).reduce((a,b)=>a+b,0);
+    case 'threes': return dice.filter(d=>d===3).reduce((a,b)=>a+b,0);
+    case 'fours':  return dice.filter(d=>d===4).reduce((a,b)=>a+b,0);
+    case 'fives':  return dice.filter(d=>d===5).reduce((a,b)=>a+b,0);
+    case 'sixes':  return dice.filter(d=>d===6).reduce((a,b)=>a+b,0);
+    case 'three_kind': return vals.some(v=>v>=3)?s:0;
+    case 'four_kind':  return vals.some(v=>v>=4)?s:0;
+    case 'full_house': return (vals.includes(3)&&vals.includes(2))||vals.includes(5)?25:0;
+    case 'sm_straight':{
+      const u=[...new Set(dice)].sort((a,b)=>a-b).join('');
+      return ['1234','2345','3456','12345','23456','123456'].some(s2=>u.includes(s2))?30:0;
+    }
+    case 'lg_straight':{
+      const u=[...new Set(dice)].sort((a,b)=>a-b).join('');
+      return u==='12345'||u==='23456'?40:0;
+    }
+    case 'yatzy':  return vals.some(v=>v===5)?50:0;
+    case 'chance': return s;
+    /* ── MAXI YATZY (6 dice, Scandinavian scoring) ── */
+    case 'm_pair':{for(let v=6;v>=1;v--)if((c[v]||0)>=2)return v*2;return 0;}
+    case 'm_2pairs':{const ps=pairsOf(c);return ps.length>=2?(ps[0]+ps[1])*2:0;}
+    case 'm_3pairs':{const ps=pairsOf(c);return ps.length>=3?(ps[0]+ps[1]+ps[2])*2:0;}
+    case 'm_3kind':{for(let v=6;v>=1;v--)if((c[v]||0)>=3)return v*3;return 0;}
+    case 'm_4kind':{for(let v=6;v>=1;v--)if((c[v]||0)>=4)return v*4;return 0;}
+    case 'm_5kind':{for(let v=6;v>=1;v--)if((c[v]||0)>=5)return v*5;return 0;}
+    case 'm_sstr': return [1,2,3,4,5].every(v=>(c[v]||0)>=1)?15:0;
+    case 'm_lstr': return [2,3,4,5,6].every(v=>(c[v]||0)>=1)?20:0;
+    case 'm_fstr': return [1,2,3,4,5,6].every(v=>(c[v]||0)>=1)?21:0;
+    case 'm_house':{
+      let t=0,p=0;
+      for(let v=6;v>=1;v--)if(!t&&(c[v]||0)>=3)t=v;
+      for(let v=6;v>=1;v--)if(!p&&v!==t&&(c[v]||0)>=2)p=v;
+      return t&&p?t*3+p*2:0;
+    }
+    case 'm_villa':{
+      const ts=[];
+      for(let v=6;v>=1;v--){if((c[v]||0)>=6)ts.push(v,v);else if((c[v]||0)>=3)ts.push(v);}
+      return ts.length>=2?ts[0]*3+ts[1]*3:0;
+    }
+    case 'm_tower':{
+      let f=0,p=0;
+      for(let v=6;v>=1;v--)if(!f&&(c[v]||0)>=4)f=v;
+      for(let v=6;v>=1;v--)if(!p&&v!==f&&(c[v]||0)>=2)p=v;
+      if(!f)return 0;
+      if(!p&&(c[f]||0)>=6)p=f; // six of a kind = tower of same value
+      return f&&p?f*4+p*2:0;
+    }
+    case 'm_chance': return s;
+    case 'm_maxi': return vals.some(v=>v===6)?100:0;
+  }
+  return 0;
+}
+
+// pairs (value once per pair, 4-of-a-kind = two pairs), sorted high→low
+function pairsOf(c){
+  const ps=[];
+  for(let v=6;v>=1;v--){const n=Math.floor((c[v]||0)/2);for(let k=0;k<n;k++)ps.push(v);}
+  return ps;
+}
+
+let BONUS_AT=63, BONUS_PTS=35;
+function upperBonus(scores){
+  const upperTotal=UPPER.reduce((a,cat)=>a+(scores[cat.id]!==null?scores[cat.id]:0),0);
+  return upperTotal>=BONUS_AT?BONUS_PTS:0;
+}
+
+function totalScore(scores){
+  let t=ALL_CATS.reduce((a,cat)=>a+(scores[cat.id]!==null?scores[cat.id]:0),0);
+  t+=upperBonus(scores);
+  return t;
+}
+
+// ═══════════════════════════════════════════════
+// GAME STATE
+// ═══════════════════════════════════════════════
+let gameMode='solo', gameType='classic', DICE_N=5;
+let players=[], currentPlayer=0;
+let dice=[1,1,1,1,1], locked=[false,false,false,false,false];
+let rollsLeft=3, rolling=false, gameOver=false;
+let aiThinking=false;
+
+function setType(t){
+  gameType=t;
+  const cl=document.getElementById('type-classic'),mx=document.getElementById('type-maxi');
+  cl.style.borderColor=t==='classic'?'var(--accent)':'var(--border)';
+  cl.style.color=t==='classic'?'var(--accent)':'var(--text)';
+  mx.style.borderColor=t==='maxi'?'var(--accent)':'var(--border)';
+  mx.style.color=t==='maxi'?'var(--accent)':'var(--text)';
+  document.getElementById('type-desc').innerHTML=t==='maxi'
+    ?'Roll <b>6 dice</b> up to 3 times per turn.<br>20 categories — pairs, straights, villa & tower.<br>Bonus +100 at 84 upper points. Highest total wins!'
+    :'Roll 5 dice up to 3 times per turn.<br>Lock dice to keep them. Score in 13 categories.<br>Bonus +35 at 63 upper points. Highest total wins!';
+}
+
+function makeFreshScores(){
+  const s={};ALL_CATS.forEach(c=>s[c.id]=null);return s;
+}
+
+function startGame(mode){
+  gameMode=mode;
+  // apply game type
+  if(gameType==='maxi'){LOWER=LOWER_MAXI;DICE_N=6;BONUS_AT=84;BONUS_PTS=100;}
+  else{LOWER=LOWER_CLASSIC;DICE_N=5;BONUS_AT=63;BONUS_PTS=35;}
+  ALL_CATS=[...UPPER,...LOWER];
+  document.getElementById('mode-pick').style.display='none';
+  document.getElementById('game-area').style.display='block';
+  document.getElementById('hdr-btns').style.display='flex';
+  document.getElementById('win-overlay').classList.remove('show');
+  const mLabel=(gameType==='maxi'?'MAXI · ':'')+(mode==='2p'?'2 PLAYERS':mode==='ai'?'VS AI':'SOLO');
+  document.getElementById('mode-label').textContent=mLabel;
+
+  if(mode==='2p'){
+    players=[{name:'🟡 PLAYER 1',scores:makeFreshScores()},{name:'🟣 PLAYER 2',scores:makeFreshScores()}];
+  } else if(mode==='ai'){
+    players=[{name:'🟡 YOU',scores:makeFreshScores()},{name:'🤖 AI',scores:makeFreshScores()}];
+  } else {
+    players=[{name:'🟡 PLAYER',scores:makeFreshScores()}];
+  }
+  currentPlayer=0;
+  dice=[6,5,4,3,2,1].slice(0,DICE_N);locked=Array(DICE_N).fill(false);
+  rollsLeft=3;rolling=false;gameOver=false;aiThinking=false;
+
+  document.getElementById('lock-hint').style.display='none';
+  document.getElementById('lock-all-btn').style.display='none';
+  renderDice();
+  renderTable();
+  updateTurnPill();
+  updateRollBtn();
+}
+
+function showModePick(){
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('game-area').style.display='none';
+  document.getElementById('mode-pick').style.display='flex';
+  document.getElementById('hdr-btns').style.display='none';
+}
+
+// ═══════════════════════════════════════════════
+// DICE
+// ═══════════════════════════════════════════════
+function rollDice(){
+  if(rollsLeft<=0||rolling||gameOver) return;
+  if(aiThinking) return;
+  rolling=true;
+  document.getElementById('roll-btn').disabled=true;
+
+  // Compute final values now
+  const finalValues=dice.map((v,i)=>locked[i]?v:(1+Math.floor(Math.random()*6)));
+
+  // 3D tumble: spin each unlocked cube 1-2 extra full turns and land on the rolled face
+  const animDuration=960;
+  dice.forEach((v,i)=>{
+    if(locked[i])return;
+    const cube=document.getElementById('die'+i);
+    if(!cube)return;
+    spins[i]+=1+Math.floor(Math.random()*2);
+    cube.style.transition='transform .95s cubic-bezier(.3,.9,.35,1)';
+    // force reflow so the transition kicks in
+    void cube.offsetWidth;
+    cube.style.transform=cubeTransform(finalValues[i],i);
+  });
+
+  // After the cubes settle: apply final values
+  setTimeout(()=>{
+    dice=finalValues;
+    rollsLeft--;
+    rolling=false;
+    renderDice();
+    updateRollBtn();
+    document.getElementById('lock-hint').style.display=rollsLeft>0?'block':'none';
+    document.getElementById('lock-all-btn').style.display=rollsLeft>0?'inline-block':'none';
+    renderTable();
+    if(gameMode==='ai'&&currentPlayer===1) setTimeout(aiRoll,800);
+  }, animDuration+40);
+}
+
+function toggleLock(i){
+  if(rollsLeft===3||rolling) return; // must roll first
+  locked[i]=!locked[i];
+  renderDice();
+}
+
+function lockAll(){
+  for(let i=0;i<DICE_N;i++) locked[i]=true;
+  renderDice();
+}
+
+// cube rotation [rx,ry] that brings face N to the front
+const ORIENT={1:[0,0],2:[-90,0],3:[0,-90],4:[0,90],5:[90,0],6:[0,180]};
+let spins=[0,0,0,0,0,0]; // accumulated full turns per die so every roll animates
+
+function facePips(n,isLocked){
+  const pip=isLocked?'#aaddff':'#181818';
+  const POS={
+    1:[[25,25]],
+    2:[[13,13],[37,37]],
+    3:[[13,13],[25,25],[37,37]],
+    4:[[13,13],[37,13],[13,37],[37,37]],
+    5:[[13,13],[37,13],[25,25],[13,37],[37,37]],
+    6:[[13,13],[37,13],[13,25],[37,25],[13,37],[37,37]]
+  }[n]||[[25,25]];
+  let c='';
+  POS.forEach(p=>{c+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="4.8" fill="'+pip+'"/>';});
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50" style="display:block;">'+c+'</svg>';
+}
+
+function cubeTransform(val,i){
+  const[rx,ry]=ORIENT[val]||[0,0];
+  return 'rotateX('+(spins[i]*360+rx)+'deg) rotateY('+(spins[i]*360+ry)+'deg)';
+}
+
+function renderDice(){
+  const row=document.getElementById('dice-row');
+  row.innerHTML='';
+  dice.forEach((val,i)=>{
+    const wrap=document.createElement('div');
+    wrap.className='die-wrap'+(locked[i]?' locked-wrap':'');
+    wrap.title=locked[i]?'Click to unlock':'Click to lock';
+    wrap.onclick=()=>toggleLock(i);
+
+    const cube=document.createElement('div');
+    cube.className='die3d';
+    cube.id='die'+i;
+    for(let f=1;f<=6;f++){
+      const face=document.createElement('div');
+      face.className='dface f'+f;
+      face.innerHTML=facePips(f,locked[i]);
+      cube.appendChild(face);
+    }
+    cube.style.transition='none';
+    cube.style.transform=cubeTransform(val,i);
+    wrap.appendChild(cube);
+    row.appendChild(wrap);
+  });
+}
+
+// Cycle through random face values during roll animation
+function animateDice(finalValues, duration){
+  const interval=60; // ms between face changes
+  const steps=Math.floor(duration/interval);
+  let step=0;
+  const timer=setInterval(()=>{
+    step++;
+    dice.forEach((v,i)=>{
+      if(locked[i])return;
+      const el=document.getElementById('die'+i);
+      if(!el)return;
+      // Show random face during spin, final value at end
+      const showVal=step>=steps?finalValues[i]:(1+Math.floor(Math.random()*6));
+      el.innerHTML=dieSVG(showVal, false);
+    });
+    if(step>=steps) clearInterval(timer);
+  },interval);
+}
+
+// SVG die face — Chrome Auto Dark cannot touch SVG fill colors
+function dieSVG(n, isLocked){
+  const bg   = isLocked ? '#0d2040' : '#f0ede0';
+  const bord = isLocked ? '#4488ff' : '#777';
+  const pip  = isLocked ? '#aaddff' : '#111111';
+
+  // Pip positions in a 50×50 grid (9 possible slots in 3×3)
+  const POS = [
+    [null,  null,  null,  null,  [25,25], null,  null,  null,  null ],  // 1
+    [[13,13],null, null,  null,  null,    null,  null,  null,  [37,37]], // 2
+    [[13,13],null, null,  null,  [25,25], null,  null,  null,  [37,37]], // 3
+    [[13,13],null, [37,13],null, null,    null,  [13,37],null, [37,37]], // 4
+    [[13,13],null, [37,13],null, [25,25], null,  [13,37],null, [37,37]], // 5
+    [[13,13],null, [37,13],[13,25],null,  [37,25],[13,37],null,[37,37]], // 6
+  ];
+  const spots = POS[n-1]||POS[0];
+  const r = 4.5;
+  let circles='';
+  spots.forEach(p=>{ if(p) circles+=`<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${pip}"/>`; });
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50" style="display:block;">
+    <rect x="1" y="1" width="48" height="48" rx="7" fill="${bg}" stroke="${bord}" stroke-width="2"/>
+    ${circles}
+  </svg>`;
+}
+
+// Keep these for any legacy calls
+function getPipPositions(n){
+  const P={1:[0,0,0,0,1,0,0,0,0],2:[1,0,0,0,0,0,0,0,1],3:[1,0,0,0,1,0,0,0,1],4:[1,0,1,0,0,0,1,0,1],5:[1,0,1,0,1,0,1,0,1],6:[1,0,1,1,0,1,1,0,1]};
+  return P[n]||P[1];
+}
+function getPipGridStyle(){
+  return 'display:grid;grid-template-columns:repeat(3,1fr);width:44px;height:44px;gap:3px;padding:4px;';
+}
+
+// ═══════════════════════════════════════════════
+// TURN MANAGEMENT
+// ═══════════════════════════════════════════════
+function updateRollBtn(){
+  const btn=document.getElementById('roll-btn');
+  btn.disabled=rollsLeft<=0||rolling||gameOver||aiThinking;
+  btn.textContent=rollsLeft===3?'🎲 ROLL DICE':'🎲 ROLL AGAIN';
+  document.getElementById('rolls-left').textContent=rollsLeft+' ROLL'+(rollsLeft!==1?'S':'')+' REMAINING';
+}
+
+function updateTurnPill(){
+  const el=document.getElementById('turn-pill');
+  const p=players[currentPlayer];
+  el.textContent=p.name+'\'S TURN';
+  el.style.color=currentPlayer===0?'#f0c040':'#c080e0';
+  el.style.borderColor=currentPlayer===0?'#f0c040':'#c080e0';
+}
+
+function scoreCategory(cat){
+  if(rollsLeft===3) return; // must roll first
+  const p=players[currentPlayer];
+  if(p.scores[cat]!==null) return; // already scored
+  const score=calcScore(cat,dice);
+  p.scores[cat]=score;
+
+  // Next turn
+  nextTurn();
+}
+
+function nextTurn(){
+  locked=Array(DICE_N).fill(false);
+  rollsLeft=3;
+  document.getElementById('lock-hint').style.display='none';
+  document.getElementById('lock-all-btn').style.display='none';
+
+  // Check if all players done
+  const allDone=players.every(p=>ALL_CATS.every(c=>p.scores[c.id]!==null));
+  if(allDone){endGame();return;}
+
+  // Advance player
+  currentPlayer=(currentPlayer+1)%players.length;
+  // Skip player if all their categories filled (shouldn't happen in normal play)
+  if(ALL_CATS.every(c=>players[currentPlayer].scores[c.id]!==null)){
+    currentPlayer=(currentPlayer+1)%players.length;
+  }
+
+  updateTurnPill();
+  updateRollBtn();
+  renderDice();
+  renderTable();
+
+  // AI's turn
+  if(gameMode==='ai'&&currentPlayer===1){
+    aiThinking=true;
+    updateRollBtn();
+    setTimeout(aiRoll,700);
+  }
+}
+
+function endGame(){
+  gameOver=true;
+  const totals=players.map(p=>totalScore(p.scores));
+  let msg,sub,fs;
+  if(players.length===1){
+    msg='🏆 GAME OVER!';
+    sub='Final score:';
+    fs=totals[0]+' points';
+  } else {
+    const winner=totals[0]>totals[1]?players[0]:totals[1]>totals[0]?players[1]:null;
+    msg=winner?(winner.name+' WINS!'):' 🤝 TIE GAME!';
+    sub=players.map((p,i)=>p.name+': '+totals[i]).join('  |  ');
+    fs='';
+  }
+  document.getElementById('win-msg').textContent=msg;
+  document.getElementById('win-sub').textContent=sub;
+  document.getElementById('final-score').textContent=fs;
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500);
+}
+
+// ═══════════════════════════════════════════════
+// SCORE TABLE
+// ═══════════════════════════════════════════════
+function renderTable(){
+  const table=document.getElementById('score-table');
+  table.innerHTML='';
+
+  // Header
+  const thead=document.createElement('thead');
+  let hRow='<tr><th class="cat-col">CATEGORY</th>';
+  players.forEach(p=>hRow+='<th>'+p.name+'</th>');
+  hRow+='</tr>';
+  thead.innerHTML=hRow;
+  table.appendChild(thead);
+
+  const tbody=document.createElement('tbody');
+  const rolled=rollsLeft<3; // has rolled at least once this turn
+
+  function addSectionHeader(label){
+    const tr=document.createElement('tr');tr.className='section-header';
+    let td='<td colspan="'+(1+players.length)+'">'+label+'</td>';
+    tr.innerHTML=td;tbody.appendChild(tr);
+  }
+
+  function addCatRow(cat){
+    const tr=document.createElement('tr');
+    let html='<td class="cat-name" title="'+cat.desc+'">'+cat.name+'</td>';
+    players.forEach((p,pi)=>{
+      const scored=p.scores[cat.id];
+      if(scored!==null){
+        const cls=scored>0?'scored':'scored-bad';
+        html+='<td class="'+cls+'">'+(scored>0?scored:'—')+'</td>';
+      } else if(pi===currentPlayer&&rolled&&!gameOver&&!(gameMode==='ai'&&pi===1&&aiThinking)){
+        const pot=calcScore(cat.id,dice);
+        html+='<td class="available" onclick="scoreCategory(\''+cat.id+'\')" title="Score '+pot+' pts">'+
+              (pot>0?pot:'0')+'</td>';
+      } else {
+        html+='<td class="potential">—</td>';
+      }
+    });
+    tr.innerHTML=html;tbody.appendChild(tr);
+  }
+
+  // Upper section
+  addSectionHeader('UPPER SECTION');
+  UPPER.forEach(cat=>addCatRow(cat));
+
+  // Upper subtotal + bonus
+  const upRow=document.createElement('tr');upRow.className='total-row';
+  let upHtml='<td class="cat-name">Upper Total</td>';
+  players.forEach(p=>{
+    const t=UPPER.reduce((a,cat)=>a+(p.scores[cat.id]!==null?p.scores[cat.id]:0),0);
+    const needed=Math.max(0,BONUS_AT-t);
+    upHtml+='<td>'+(t>0?t:'0')+(needed>0?' <span style="font-size:10px;color:#555;">(need '+needed+' for bonus)</span>':'')+'</td>';
+  });
+  upRow.innerHTML=upHtml;tbody.appendChild(upRow);
+
+  const bonRow=document.createElement('tr');bonRow.className='bonus-row total-row';
+  let bonHtml='<td class="cat-name">Bonus (+'+BONUS_PTS+')</td>';
+  players.forEach(p=>{
+    const t=UPPER.reduce((a,cat)=>a+(p.scores[cat.id]!==null?p.scores[cat.id]:0),0);
+    bonHtml+='<td>'+(t>=BONUS_AT?'+'+BONUS_PTS:'—')+'</td>';
+  });
+  bonRow.innerHTML=bonHtml;tbody.appendChild(bonRow);
+
+  // Lower section
+  addSectionHeader('LOWER SECTION');
+  LOWER.forEach(cat=>addCatRow(cat));
+
+  // Grand total
+  const totRow=document.createElement('tr');totRow.className='total-row';
+  let totHtml='<td class="cat-name">TOTAL SCORE</td>';
+  players.forEach(p=>totHtml+='<td>'+totalScore(p.scores)+'</td>');
+  totRow.innerHTML=totHtml;tbody.appendChild(totRow);
+
+  table.appendChild(tbody);
+}
+
+// ═══════════════════════════════════════════════
+// AI
+// ═══════════════════════════════════════════════
+function aiRoll(){
+  if(!aiThinking) return;
+  // Roll
+  dice=dice.map((v,i)=>locked[i]?v:(1+Math.floor(Math.random()*6)));
+  rollsLeft--;
+
+  // Decide what to keep: find best category potential
+  if(rollsLeft>0){
+    aiDecideLocks();
+    setTimeout(()=>{
+      if(rollsLeft>0){
+        dice=dice.map((v,i)=>locked[i]?v:(1+Math.floor(Math.random()*6)));
+        rollsLeft--;
+        aiDecideLocks();
+      }
+      renderDice();renderTable();
+      setTimeout(aiScore,600);
+    },600);
+  } else {
+    renderDice();renderTable();
+    setTimeout(aiScore,600);
+  }
+}
+
+function aiDecideLocks(){
+  const p=players[1];
+  // Find best available category
+  const avail=ALL_CATS.filter(c=>p.scores[c.id]===null);
+  if(!avail.length) return;
+
+  // Score each category with current dice
+  const scores=avail.map(c=>({cat:c.id,score:calcScore(c.id,dice)}));
+  scores.sort((a,b)=>b.score-a.score);
+  const bestCat=scores[0].cat;
+
+  // Lock dice that contribute to best category
+  const c=counts(dice);
+  locked=Array(DICE_N).fill(false);
+
+  const KIND_CATS=['yatzy','four_kind','three_kind','m_3kind','m_4kind','m_5kind','m_maxi'];
+  const PAIR_CATS=['full_house','m_house','m_villa','m_tower','m_pair','m_2pairs','m_3pairs'];
+  const STR_CATS=['lg_straight','sm_straight','m_sstr','m_lstr','m_fstr'];
+
+  if(['ones','twos','threes','fours','fives','sixes'].includes(bestCat)){
+    const n={'ones':1,'twos':2,'threes':3,'fours':4,'fives':5,'sixes':6}[bestCat];
+    dice.forEach((v,i)=>{if(v===n)locked[i]=true;});
+  } else if(KIND_CATS.includes(bestCat)){
+    // Lock the most frequent value
+    const maxCnt=Math.max(...Object.values(c));
+    const bestVal=parseInt(Object.keys(c).find(k=>c[k]===maxCnt));
+    dice.forEach((v,i)=>{if(v===bestVal)locked[i]=true;});
+  } else if(PAIR_CATS.includes(bestCat)){
+    // Lock every die that is part of a pair or better
+    dice.forEach((v,i)=>{if(c[v]>=2)locked[i]=true;});
+  } else if(STR_CATS.includes(bestCat)){
+    // Lock one die of each distinct value
+    const seen=new Set();
+    dice.forEach((v,i)=>{if(!seen.has(v)){seen.add(v);locked[i]=true;}});
+  } else {
+    // Chance — lock highest dice
+    const sorted=[...dice].sort((a,b)=>b-a);
+    let toKeep=Math.ceil(DICE_N*0.6);
+    dice.forEach((v,i)=>{if(toKeep>0&&v>=sorted[0]-1){locked[i]=true;toKeep--;}});
+  }
+}
+
+function aiScore(){
+  const p=players[1];
+  const avail=ALL_CATS.filter(c=>p.scores[c.id]===null);
+  if(!avail.length){nextTurn();return;}
+
+  // Score best available category
+  const scores=avail.map(c=>({cat:c.id,score:calcScore(c.id,dice)}));
+  scores.sort((a,b)=>b.score-a.score);
+  const best=scores[0];
+
+  // Prefer not to waste a zero if we have points elsewhere
+  const nonZero=scores.filter(s=>s.score>0);
+  const chosen=nonZero.length>0?nonZero[0]:best;
+
+  p.scores[chosen.cat]=chosen.score;
+  aiThinking=false;
+  locked=Array(DICE_N).fill(false);
+  nextTurn();
+}
+
+// Start on mode pick
+document.getElementById('mode-pick').style.display='flex';
+document.getElementById('game-area').style.display='none';
+</script>
+</body>
+</html>

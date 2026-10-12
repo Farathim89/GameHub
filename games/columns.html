@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Columns</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.co-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+.co-main{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;justify-content:center;}
+#columns{background:#0a0a14;border:2px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.5);touch-action:none;}
+.co-side{display:flex;flex-direction:column;gap:10px;}
+.co-panel{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:10px;text-align:center;min-width:100px;}
+.co-panel .lbl{font-family:'Orbitron',monospace;font-size:10px;color:var(--dim);letter-spacing:2px;} .co-panel .val{font-family:'Orbitron',monospace;font-size:22px;font-weight:900;color:var(--accent);}
+.co-ctrls{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;}
+.co-btn{font-family:'Orbitron',monospace;font-size:17px;font-weight:700;width:52px;height:46px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.co-btn:active{background:rgba(240,192,64,.18);}
+.co-hint{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#c080e0">🟪 COLUMNS</span>
+  <div class="h-btns">
+    <button class="hbtn" id="pause-btn" onclick="togglePause()">⏸ PAUSE</button>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="co-wrap">
+  <div class="co-main">
+    <canvas id="columns" width="180" height="390"></canvas>
+    <div class="co-side">
+      <div class="co-panel"><div class="lbl">SCORE</div><div class="val" id="score">0</div></div>
+      <div class="co-panel"><div class="lbl">BEST</div><div class="val" id="best">0</div></div>
+      <div class="co-panel"><div class="lbl">NEXT</div><canvas id="next" width="40" height="100"></canvas></div>
+    </div>
+  </div>
+  <div class="co-ctrls">
+    <button class="co-btn" onpointerdown="pd(event,'left')">◀</button>
+    <button class="co-btn" onpointerdown="pd(event,'cycle')">⟳</button>
+    <button class="co-btn" onpointerdown="pd(event,'right')">▶</button>
+    <button class="co-btn" onpointerdown="pd(event,'drop')">⏬</button>
+  </div>
+  <div class="co-hint">← → move · ↑ cycle colours · ↓ soft · Space hard drop. Line up 3+ same colour (any direction)!</div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">💥 GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='columns';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const COLS=6, ROWS=13, CELL=30;
+const cv=document.getElementById('columns'), ctx=cv.getContext('2d');
+const nx=document.getElementById('next'), nctx=nx.getContext('2d');
+const COLORS=['#e05050','#f0c040','#40c0a0','#5090e0','#c080e0','#f0a040'];
+let grid, piece, next, score, best, over, paused, raf, dropMs, acc, last;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){
+  grid=Array.from({length:ROWS},()=>Array(COLS).fill(-1));
+  score=0; over=false; paused=false; dropMs=600; acc=0;
+  next=randPiece(); spawn();
+  document.getElementById('win-overlay').classList.remove('show'); document.getElementById('pause-btn').textContent='⏸ PAUSE';
+  updateHud(); drawNext();
+  last=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+}
+function randPiece(){ return {col:(COLS/2)|0, y:0, gems:[rc(),rc(),rc()]}; }
+function rc(){ return 0|Math.random()*COLORS.length; }
+function spawn(){ piece=next; piece.col=(COLS/2)|0; piece.y=0; next=randPiece(); drawNext();
+  if(grid[0][piece.col]!==-1||grid[1][piece.col]!==-1||grid[2][piece.col]!==-1){ gameOver(); } }
+function canFall(){ const br=piece.y+3; return br<ROWS && grid[br][piece.col]===-1; }
+function move(dx){ const nc=piece.col+dx; if(nc<0||nc>=COLS)return; // can't move into a stack higher than piece bottom
+  // allow move if the three target cells are empty
+  for(let i=0;i<3;i++){ const r=piece.y+i; if(r>=0&&r<ROWS&&grid[r][nc]!==-1)return; }
+  piece.col=nc; draw(); }
+function cycle(){ piece.gems.unshift(piece.gems.pop()); sfx('move'); draw(); }
+function softDrop(){ if(canFall()){ piece.y++; score+=1; updateHud(); draw(); } else lock(); }
+function hardDrop(){ while(canFall())piece.y++; lock(); }
+function lock(){
+  for(let i=0;i<3;i++){ const r=piece.y+i; if(r>=0&&r<ROWS) grid[r][piece.col]=piece.gems[i]; }
+  sfx('drop'); resolve(); spawn(); draw();
+}
+function resolve(){
+  let chain=0;
+  while(true){
+    const marks=findMatches();
+    if(!marks.size) break;
+    chain++;
+    marks.forEach(k=>{ const [r,c]=k.split(',').map(Number); grid[r][c]=-1; });
+    score += marks.size*10*chain; updateHud(); sfx('pop');
+    gravity();
+  }
+}
+function gravity(){ for(let c=0;c<COLS;c++){ let write=ROWS-1; for(let r=ROWS-1;r>=0;r--){ if(grid[r][c]!==-1){ grid[write][c]=grid[r][c]; if(write!==r)grid[r][c]=-1; write--; } } } }
+function findMatches(){
+  const marks=new Set();
+  const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ const v=grid[r][c]; if(v<0)continue;
+    for(const [dr,dc] of dirs){ let n=1; const cells=[[r,c]];
+      let rr=r+dr,cc=c+dc; while(rr>=0&&rr<ROWS&&cc>=0&&cc<COLS&&grid[rr][cc]===v){ cells.push([rr,cc]); rr+=dr;cc+=dc; n++; }
+      if(n>=3) cells.forEach(([a,b])=>marks.add(a+','+b));
+    }
+  }
+  return marks;
+}
+function loop(t){ if(over)return; if(!paused){ acc+=t-last; if(acc>=dropMs){ acc=0; if(canFall())piece.y++; else lock(); draw(); } } last=t; raf=requestAnimationFrame(loop); }
+function cellRect(g,x,y,color,size){ g.fillStyle=COLORS[color]; g.fillRect(x+1,y+1,size-2,size-2); g.fillStyle='rgba(255,255,255,.3)'; g.beginPath(); g.arc(x+size*0.35,y+size*0.35,size*0.14,0,7); g.fill(); }
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.strokeStyle='rgba(255,255,255,.05)'; for(let c=1;c<COLS;c++){ctx.beginPath();ctx.moveTo(c*CELL,0);ctx.lineTo(c*CELL,ROWS*CELL);ctx.stroke();}
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) if(grid[r][c]>=0) cellRect(ctx,c*CELL,r*CELL,grid[r][c],CELL);
+  if(piece&&!over) for(let i=0;i<3;i++){ const r=piece.y+i; if(r>=0) cellRect(ctx,piece.col*CELL,r*CELL,piece.gems[i],CELL); }
+}
+function drawNext(){ nctx.clearRect(0,0,nx.width,nx.height); for(let i=0;i<3;i++) cellRect(nctx,2,2+i*32,next.gems[i],30); }
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('best').textContent=best; }
+function gameOver(){ over=true; const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score,isBest:false}; best=r.value; document.getElementById('best').textContent=best;
+  document.getElementById('win-sub').textContent='Score '+score+(r.isBest&&score>0?' — NEW BEST! 🎉':' · Best '+best); setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300); }
+function togglePause(){ if(over)return; paused=!paused; document.getElementById('pause-btn').textContent=paused?'▶ RESUME':'⏸ PAUSE'; }
+function pd(e,a){ e.preventDefault(); if(over||paused)return; act(a); }
+function act(a){ if(a==='left')move(-1); else if(a==='right')move(1); else if(a==='cycle')cycle(); else if(a==='drop')hardDrop(); }
+document.addEventListener('keydown',e=>{ if(over)return; if(e.key==='p'||e.key==='P'){togglePause();return;} if(paused)return;
+  switch(e.key){ case 'ArrowLeft':case 'a':move(-1);e.preventDefault();break; case 'ArrowRight':case 'd':move(1);e.preventDefault();break;
+    case 'ArrowUp':case 'w':cycle();e.preventDefault();break; case 'ArrowDown':case 's':softDrop();e.preventDefault();break; case ' ':hardDrop();e.preventDefault();break; } });
+newGame();
+</script>
+</body>
+</html>

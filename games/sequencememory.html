@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sequence Memory</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.sq-wrap{display:flex;flex-direction:column;align-items:center;gap:18px;padding:18px 12px;}
+.sq-level{font-family:'Orbitron',monospace;font-size:15px;letter-spacing:2px;}
+.sq-level b{color:var(--accent);font-size:22px;}
+.sq-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:min(90vw,340px);}
+.sq-c{aspect-ratio:1;border-radius:14px;background:var(--surface);border:3px solid var(--border);cursor:pointer;transition:all .12s;}
+.sq-c.on{background:#6cf;border-color:#fff;box-shadow:0 0 24px #6cf;transform:scale(1.04);}
+.sq-c.bad{background:#c02030;border-color:#c02030;}
+.sq-msg{font-family:'Orbitron',monospace;font-size:15px;min-height:24px;letter-spacing:1px;text-align:center;}
+.sq-b{font-family:'Orbitron',monospace;font-size:16px;font-weight:800;padding:12px 40px;border-radius:11px;border:3px solid var(--green);background:var(--green);color:#0a140a;cursor:pointer;letter-spacing:2px;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0e0">🔁 SEQUENCE MEMORY</span>
+  <div class="h-btns"><div class="info-pill">BEST: <span id="best">0</span></div><button class="hbtn" onclick="newGame()">RESTART</button></div>
+</div>
+<div class="sq-wrap">
+  <div class="sq-level">LEVEL <b id="level">1</b></div>
+  <div class="sq-grid" id="grid"></div>
+  <div class="sq-msg" id="msg"></div>
+  <button class="sq-b" id="startBtn" onclick="startLevel()">START</button>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">GAME OVER</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns"><button class="win-btn" onclick="newGame()">PLAY AGAIN</button><button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button></div>
+</div>
+<script>
+const GAME='sequencememory';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+let seq=[], idx=0, level=1, playing=false, accept=false, best, over=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+document.getElementById('best').textContent=best;
+const grid=document.getElementById('grid');
+for(let i=0;i<9;i++){ const d=document.createElement('div'); d.className='sq-c'; const idx2=i; d.onclick=()=>click(idx2); grid.appendChild(d); }
+function newGame(){ seq=[]; level=1; over=false; accept=false; document.getElementById('win-overlay').classList.remove('show'); document.getElementById('best').textContent=best; document.getElementById('level').textContent=1; document.getElementById('msg').textContent=''; document.getElementById('startBtn').style.display='inline-block'; }
+function startLevel(){ document.getElementById('startBtn').style.display='none'; seq.push(0|Math.random()*9); idx=0; playback(); }
+function flash(i,cls){ return new Promise(res=>{ const el=grid.children[i]; el.classList.add(cls); sfx('pop'); setTimeout(()=>{ el.classList.remove(cls); setTimeout(res,160); }, 380); }); }
+async function playback(){ playing=true; accept=false; document.getElementById('msg').textContent='Watch…'; await new Promise(r=>setTimeout(r,400));
+  for(const i of seq){ await flash(i,'on'); } playing=false; accept=true; idx=0; document.getElementById('msg').textContent='Your turn — repeat the sequence.'; }
+function click(i){ if(!accept||over||playing)return; const el=grid.children[i]; el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),180); sfx('select');
+  if(i===seq[idx]){ idx++; if(idx===seq.length){ accept=false; level++; if(level-1>best){ best=level-1; if(window.GH)GH.score.best(GAME,'best',best,'high'); document.getElementById('best').textContent=best; } document.getElementById('level').textContent=level; document.getElementById('msg').textContent='Correct!'; setTimeout(startLevel,650); } }
+  else { accept=false; over=true; el.classList.add('bad'); sfx('lose'); setTimeout(()=>el.classList.remove('bad'),500); finish(); }
+}
+function finish(){ document.getElementById('win-msg').textContent='REACHED LEVEL '+level; document.getElementById('win-sub').textContent='Longest sequence '+(level-1)+'. Best '+best+'.'; setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),500); }
+newGame();
+</script>
+</body>
+</html>

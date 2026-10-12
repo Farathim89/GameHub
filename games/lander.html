@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lunar Lander</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ll-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 10px;}
+#lander{background:#04040c;border:2px solid var(--border);border-radius:10px;max-width:100%;touch-action:none;box-shadow:0 6px 24px rgba(0,0,0,.5);}
+.ll-ctrls{display:flex;gap:8px;}
+.ll-ctrls button{font-size:20px;width:64px;height:50px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;}
+.ll-ctrls button:active{background:rgba(240,192,64,.18);}
+.ll-hint{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--dim);text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#40c0a0">🚀 LUNAR LANDER</span>
+  <div class="h-btns">
+    <div class="info-pill">LANDINGS: <span id="score">0</span></div>
+    <div class="info-pill">BEST: <span id="best">0</span></div>
+    <div class="info-pill">FUEL: <span id="fuel">100</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ll-wrap">
+  <div class="ll-hint">Land gently on the <b style="color:#40c0a0">green pad</b> — slow, level, and upright. Rotate ← →, thrust ↑.</div>
+  <canvas id="lander" width="560" height="420"></canvas>
+  <div class="ll-ctrls">
+    <button onpointerdown="hold('l',1)" onpointerup="hold('l',0)" onpointerleave="hold('l',0)">↺</button>
+    <button onpointerdown="hold('t',1)" onpointerup="hold('t',0)" onpointerleave="hold('t',0)">🔥</button>
+    <button onpointerdown="hold('r',1)" onpointerup="hold('r',0)" onpointerleave="hold('r',0)">↻</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 LANDED!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" id="cont-btn" onclick="cont()">CONTINUE →</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='lander';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const cv=document.getElementById('lander'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, GRAV=0.03, THRUST=0.09, ROT=0.05;
+let ship, pad, ground, score, best, level, state, raf, L=false,R=false,T=false, landedOK=false;
+best=(window.GH?GH.score.get(GAME,'best'):0)||0;
+
+function newGame(){ score=0; level=1; startLevel(); }
+function startLevel(){
+  document.getElementById('win-overlay').classList.remove('show');
+  ship={x:W/2,y:50,vx:(Math.random()-0.5)*1.5,vy:0,a:0,fuel:100};
+  const groundY=H-40;
+  const padW=Math.max(50, 110-level*8);
+  const padX=40+Math.random()*(W-80-padW);
+  pad={x:padX,w:padW,y:groundY};
+  ground=groundY;
+  state='play'; landedOK=false;
+  updateHud();
+  cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+}
+function loop(){ if(state!=='play'){return;} update(); draw(); raf=requestAnimationFrame(loop); }
+function update(){
+  if(L)ship.a-=ROT; if(R)ship.a+=ROT;
+  if(T&&ship.fuel>0){ ship.vx+=Math.sin(ship.a)*THRUST; ship.vy-=Math.cos(ship.a)*THRUST; ship.fuel=Math.max(0,ship.fuel-0.4); }
+  ship.vy+=GRAV;
+  ship.x+=ship.vx; ship.y+=ship.vy;
+  if(ship.x<0)ship.x=0; if(ship.x>W)ship.x=W;
+  updateHud();
+  if(ship.y+14>=ground){
+    ship.y=ground-14;
+    const onPad = ship.x>pad.x && ship.x<pad.x+pad.w;
+    const slow = Math.abs(ship.vy)<1.6 && Math.abs(ship.vx)<1.2;
+    const upright = Math.abs(normalize(ship.a))<0.25;
+    if(onPad && slow && upright){ landedOK=true; success(); }
+    else crash(onPad?'Too fast / tilted!':'Missed the pad!');
+  }
+}
+function normalize(a){ a=a%(Math.PI*2); if(a>Math.PI)a-=Math.PI*2; if(a<-Math.PI)a+=Math.PI*2; return a; }
+function success(){
+  state='won'; sfx('win'); score++; level++;
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score}; best=r.value;
+  updateHud(); draw();
+  document.getElementById('win-msg').textContent='🏆 LANDED!';
+  document.getElementById('cont-btn').textContent='NEXT PAD →';
+  document.getElementById('win-sub').textContent='Fuel left '+Math.round(ship.fuel)+' · '+score+' landed'+(r.isBest?' — NEW BEST! 🎉':'');
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+function crash(reason){
+  state='crash'; sfx('lose'); draw();
+  const r=window.GH?GH.score.best(GAME,'best',score,'high'):{value:score}; best=r.value;
+  document.getElementById('win-msg').textContent='💥 CRASHED';
+  document.getElementById('cont-btn').textContent='TRY AGAIN';
+  document.getElementById('win-sub').textContent=reason+' · '+score+' safe landings';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+function cont(){ if(landedOK) startLevel(); else { score=0; level=1; startLevel(); } }
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // stars
+  ctx.fillStyle='rgba(255,255,255,.4)'; for(let i=0;i<40;i++){ ctx.fillRect((i*79)%W,(i*53)%(H-60),1,1); }
+  // ground + pad
+  ctx.fillStyle='#2a2a38'; ctx.fillRect(0,ground,W,H-ground);
+  ctx.fillStyle='#40c0a0'; ctx.fillRect(pad.x,ground-3,pad.w,5);
+  ctx.fillStyle='#2a8a70'; for(let x=pad.x+4;x<pad.x+pad.w;x+=10) ctx.fillRect(x,ground,2,6);
+  // ship
+  ctx.save(); ctx.translate(ship.x,ship.y); ctx.rotate(ship.a);
+  if(T&&ship.fuel>0&&state==='play'){ ctx.fillStyle='#f0a040'; ctx.beginPath(); ctx.moveTo(-5,10);ctx.lineTo(5,10);ctx.lineTo(0,10+8+Math.random()*6);ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle=state==='crash'?'#e05050':'#d0d0e0';
+  ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(10,8); ctx.lineTo(6,12); ctx.lineTo(-6,12); ctx.lineTo(-10,8); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#888'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-6,12);ctx.lineTo(-10,18); ctx.moveTo(6,12);ctx.lineTo(10,18); ctx.stroke();
+  ctx.restore();
+  // velocity readout
+  ctx.fillStyle=Math.abs(ship.vy)<1.6?'#40c0a0':'#e05050'; ctx.font='12px Share Tech Mono,monospace'; ctx.textAlign='left';
+  ctx.fillText('↓ '+ship.vy.toFixed(1)+'  ↔ '+ship.vx.toFixed(1),10,20);
+}
+function updateHud(){ document.getElementById('score').textContent=score; document.getElementById('best').textContent=best; document.getElementById('fuel').textContent=Math.round(ship.fuel); }
+function hold(k,v){ if(k==='l')L=!!v; else if(k==='r')R=!!v; else if(k==='t')T=!!v; }
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft'){L=true;e.preventDefault();} if(e.key==='ArrowRight'){R=true;e.preventDefault();} if(e.key==='ArrowUp'){T=true;e.preventDefault();}
+});
+document.addEventListener('keyup',e=>{ if(e.key==='ArrowLeft')L=false; if(e.key==='ArrowRight')R=false; if(e.key==='ArrowUp')T=false; });
+newGame();
+</script>
+</body>
+</html>

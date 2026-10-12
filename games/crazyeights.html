@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crazy Eights</title>
+<link rel="stylesheet" href="shared.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../themes/themes.css">
+<script src="../themes/themes.js" defer></script>
+<script src="../lang/lang.js" defer></script>
+<style>
+.ce-wrap{display:flex;flex-direction:column;gap:12px;padding:12px;max-width:760px;margin:0 auto;}
+.ce-sec{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:10px;}
+.ce-lbl{font-family:'Orbitron',monospace;font-size:11px;color:var(--dim);letter-spacing:2px;margin-bottom:6px;}
+.ce-hand{display:flex;gap:5px;flex-wrap:wrap;}
+.card{width:58px;height:82px;font-size:20px;cursor:pointer;transition:transform .12s;}
+.card .ctop{padding:4px 6px;}
+.card.play:hover{transform:translateY(-8px);}
+.card.dim{opacity:.4;cursor:not-allowed;}
+.ce-center{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.ce-msg{font-family:'Orbitron',monospace;font-size:14px;min-height:22px;text-align:center;letter-spacing:1px;}
+.ce-draw{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;padding:10px 18px;border-radius:8px;border:2px solid var(--accent);color:var(--accent);background:var(--surface2);cursor:pointer;}
+.ce-suit{display:flex;gap:10px;justify-content:center;}
+.ce-suit button{font-size:28px;width:56px;height:56px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);cursor:pointer;}
+.ce-suit button:hover{border-color:var(--accent);}
+.suit-pick{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+.suit-pick.show{display:flex;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <a class="back-btn" href="../index.html">← HUB</a>
+  <span class="h-title" style="color:#5090e0">🎴 CRAZY EIGHTS</span>
+  <div class="h-btns">
+    <div class="info-pill">DECK: <span id="deck">0</span></div>
+    <button class="hbtn" onclick="newGame()">NEW GAME</button>
+  </div>
+</div>
+<div class="ce-wrap">
+  <div class="ce-sec"><div class="ce-lbl">🤖 AI — <span id="aiCount">0</span> cards</div><div class="ce-hand" id="aiHand"></div></div>
+  <div class="ce-sec ce-center">
+    <div><div class="ce-lbl">DRAW</div><div class="card back" style="cursor:pointer" onclick="playerDraw()"></div></div>
+    <div><div class="ce-lbl">TOP (<span id="curSuit"></span>)</div><div id="top"></div></div>
+    <div><div class="ce-msg" id="msg"></div><button class="ce-draw" id="drawBtn" onclick="playerDraw()">DRAW CARD</button></div>
+  </div>
+  <div class="ce-sec"><div class="ce-lbl">🟡 YOU — YOUR HAND</div><div class="ce-hand" id="myHand"></div></div>
+</div>
+<div class="suit-pick" id="suitPick">
+  <div style="font-family:'Orbitron';color:var(--accent);font-size:18px;">CHOOSE A SUIT</div>
+  <div class="ce-suit">
+    <button onclick="chooseSuit(0)" style="color:#111">♠</button>
+    <button onclick="chooseSuit(1)" style="color:#e05050">♥</button>
+    <button onclick="chooseSuit(2)" style="color:#e05050">♦</button>
+    <button onclick="chooseSuit(3)" style="color:#111">♣</button>
+  </div>
+</div>
+<div id="win-overlay">
+  <div class="win-msg" id="win-msg">🏆 YOU WIN!</div>
+  <div class="win-sub" id="win-sub"></div>
+  <div class="win-btns">
+    <button class="win-btn" onclick="newGame()">PLAY AGAIN</button>
+    <button class="win-btn sec" onclick="location.href='../index.html'">← HUB</button>
+  </div>
+</div>
+<script>
+const GAME='crazyeights';
+function sfx(n){try{if(window.GH)GH.sfx.play(n);}catch(e){}}
+const SUITS=['♠','♥','♦','♣'], RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+let deck=[], discard=[], you=[], ai=[], curSuit=0, turn=0, over=false, pendingEight=null, busy=false;
+let pendingSlide=null;
+
+function newGame(){
+  over=false; busy=false; pendingEight=null;
+  deck=[]; for(let s=0;s<4;s++)for(let r=0;r<13;r++)deck.push({s,r});
+  shuffle(deck);
+  you=deck.splice(0,7); ai=deck.splice(0,7);
+  let t; do{ t=deck.pop(); }while(t.r===7); // not an 8 to start (rank index 7 = '8')
+  discard=[t]; curSuit=t.s; turn=0;
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('suitPick').classList.remove('show');
+  setMsg('Your turn — play a matching card.');
+  render();
+  document.querySelectorAll('.card').forEach(function(c,i){c.classList.add('gh-deal');c.style.animationDelay=(i*38)+'ms';});
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}}
+function topCard(){ return discard[discard.length-1]; }
+function canPlay(card){ return card.r===7 || card.s===curSuit || card.r===topCard().r; }
+function cardHTML(card,cls){
+  const red=card.s===1||card.s===2;
+  return `<div class="card ${red?'red':'black'} ${cls||''}"><div class="ctop"><span class="crank">${RANKS[card.r]}</span><span class="csuit">${SUITS[card.s]}</span></div><div class="cmid">${SUITS[card.s]}</div></div>`;
+}
+function render(){
+  document.getElementById('deck').textContent=deck.length;
+  document.getElementById('aiCount').textContent=ai.length;
+  document.getElementById('curSuit').textContent=SUITS[curSuit];
+  document.getElementById('top').innerHTML=cardHTML(topCard());
+  // ai hand face-down
+  document.getElementById('aiHand').innerHTML=ai.map(()=>'<div class="card back"></div>').join('');
+  // my hand
+  const myTurn=turn===0&&!over&&!busy;
+  const mh=document.getElementById('myHand'); mh.innerHTML='';
+  you.forEach((card,i)=>{
+    const playable=myTurn&&canPlay(card);
+    const div=document.createElement('div'); div.innerHTML=cardHTML(card, playable?'play':'dim');
+    const el=div.firstChild; if(playable) el.onclick=()=>playCard(i);
+    mh.appendChild(el);
+  });
+  document.getElementById('drawBtn').style.display = myTurn ? '' : 'none';
+  if(pendingSlide && window.GH){ GH.slide(pendingSlide.rect, '#top', {html:pendingSlide.html}); pendingSlide=null; }
+}
+function setMsg(t){ document.getElementById('msg').textContent=t; }
+function playCard(i){
+  if(turn!==0||over||busy) return;
+  const card=you[i];
+  if(!canPlay(card)){ sfx('error'); return; }
+  const srcEl=document.getElementById('myHand').children[i]; if(srcEl)pendingSlide={rect:srcEl.getBoundingClientRect(), html:cardHTML(card)};
+  you.splice(i,1); discard.push(card); sfx('place');
+  if(card.r===7){ // eight -> choose suit
+    if(!you.length){ curSuit=card.s; return finish(0); }
+    document.getElementById('suitPick').classList.add('show'); pendingEight=true; return;
+  }
+  curSuit=card.s;
+  afterPlay(0);
+}
+function chooseSuit(s){
+  document.getElementById('suitPick').classList.remove('show');
+  curSuit=s; pendingEight=null;
+  setMsg('You chose '+SUITS[s]);
+  afterPlay(0);
+}
+function afterPlay(who){
+  render();
+  if(who===0&&!you.length) return finish(0);
+  if(who===1&&!ai.length) return finish(1);
+  turn=1-turn;
+  if(turn===1&&!over){ busy=true; setMsg('🤖 AI’s turn…'); setTimeout(aiTurn,700); }
+  else setMsg('Your turn.');
+}
+function playerDraw(){
+  if(turn!==0||over||busy) return;
+  if(!deck.length) reshuffle();
+  if(deck.length){ const c=deck.pop(); you.push(c); sfx('flip'); render();
+    if(canPlay(c)) setMsg('Drew a playable card — play it or draw again.');
+    else { setMsg('No play — turn passes.'); turn=1; busy=true; render(); setTimeout(aiTurn,700); }
+  } else { setMsg('Deck empty — turn passes.'); turn=1; busy=true; setTimeout(aiTurn,700); }
+}
+function reshuffle(){ if(discard.length<2)return; const t=discard.pop(); deck=deck.concat(discard); discard=[t]; shuffle(deck); }
+function aiTurn(){
+  if(over) return;
+  // play first playable non-8, else an 8, else draw
+  let idx=ai.findIndex(c=>c.r!==7&&canPlay(c));
+  if(idx<0) idx=ai.findIndex(c=>c.r===7);
+  if(idx<0){
+    if(!deck.length) reshuffle();
+    if(deck.length){ const c=deck.pop(); ai.push(c); if(canPlay(c)) idx=ai.length-1; }
+  }
+  if(idx<0){ busy=false; turn=0; setMsg('AI passes. Your turn.'); render(); return; }
+  const card=ai.splice(idx,1)[0]; discard.push(card); sfx('place');
+  { const aiSrc=document.getElementById('aiHand'); const bb=aiSrc&&(aiSrc.lastElementChild||aiSrc); if(bb)pendingSlide={rect:bb.getBoundingClientRect(), html:cardHTML(card)}; }
+  if(card.r===7){ // AI picks its most common suit
+    const freq=[0,0,0,0]; ai.forEach(c=>freq[c.s]++); curSuit=freq.indexOf(Math.max(...freq));
+    setMsg('🤖 AI played an 8 → '+SUITS[curSuit]);
+  } else { curSuit=card.s; setMsg('🤖 AI played '+RANKS[card.r]+SUITS[card.s]); }
+  busy=false;
+  afterPlay(1);
+}
+function finish(winner){
+  over=true; busy=false; render();
+  if(winner===0&&window.GH)GH.score.inc(GAME,'wins',1);
+  document.getElementById('win-msg').textContent=winner===0?'🏆 YOU WIN!':'🤖 AI WINS!';
+  document.getElementById('win-sub').textContent=winner===0?'You emptied your hand!':'The AI went out first.';
+  setTimeout(()=>document.getElementById('win-overlay').classList.add('show'),300);
+}
+newGame();
+</script>
+</body>
+</html>
